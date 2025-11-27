@@ -654,21 +654,57 @@ async function actualizarStocksProductos(productos) {
 }
 
 // También agrega esta ruta para obtener ventas (la necesitaremos después)
+// 🧾 RUTA ÚNICA PARA OBTENER VENTAS CON FILTROS
 app.get('/api/ventas', requireAuth, (req, res) => {
-    const query = `
+    const { fecha, usuario_id, fecha_inicio, fecha_fin } = req.query;
+    
+    let query = `
         SELECT v.*, u.username as usuario_nombre 
         FROM ventas v 
         LEFT JOIN usuarios u ON v.usuario_id = u.id 
-        ORDER BY v.fecha DESC
     `;
+    let params = [];
+    let conditions = [];
     
-    db.all(query, (err, rows) => {
+    // FILTRO POR FECHA ESPECÍFICA
+    if (fecha) {
+        conditions.push(`DATE(v.fecha) = ?`);
+        params.push(fecha);
+    }
+    
+    // FILTRO POR RANGO DE FECHAS
+    if (fecha_inicio && fecha_fin) {
+        conditions.push(`DATE(v.fecha) BETWEEN ? AND ?`);
+        params.push(fecha_inicio, fecha_fin);
+    }
+    
+    // FILTRO POR USUARIO
+    if (usuario_id) {
+        conditions.push(`v.usuario_id = ?`);
+        params.push(usuario_id);
+    }
+    
+    // CONSTRUIR QUERY FINAL
+    if (conditions.length > 0) {
+        query += ` WHERE ` + conditions.join(' AND ');
+    }
+    
+    query += ` ORDER BY v.fecha DESC`;
+    
+    console.log('📋 Consultando ventas con filtros:', { fecha, fecha_inicio, fecha_fin, usuario_id });
+    console.log('🔍 Query:', query);
+    console.log('📊 Params:', params);
+    
+    db.all(query, params, (err, rows) => {
         if (err) {
+            console.error('❌ Error en consulta de ventas:', err);
             res.status(500).json({ error: err.message });
             return;
         }
         
-        // Parsear los productos vendidos de JSON string a objeto
+        console.log(`✅ Encontradas ${rows.length} ventas con los filtros aplicados`);
+        
+        // Parsear productos vendidos y formatear fechas
         const ventasConProductos = rows.map(venta => {
             try {
                 venta.productos_vendidos = JSON.parse(venta.productos_vendidos);
@@ -677,7 +713,7 @@ app.get('/api/ventas', requireAuth, (req, res) => {
                 venta.productos_vendidos = [];
             }
             
-            // ✅ USAR FUNCIONES PROFESIONALES DE FECHA
+            // Formatear fechas para mostrar
             venta.fecha_formateada = formatearFechaCompacta(venta.fecha);
             venta.fecha_completa = formatearFechaEspanol(venta.fecha);
             
@@ -685,6 +721,54 @@ app.get('/api/ventas', requireAuth, (req, res) => {
         });
         
         res.json(ventasConProductos);
+    });
+});
+
+// 📋 AGREGA ESTA RUTA EN LA SECCIÓN DE PRODUCTOS (después de las rutas existentes):
+
+// 🚨 RUTA PARA OBTENER PRODUCTOS CON STOCK BAJO
+app.get('/api/productos/stock-bajo', requireAuth, (req, res) => {
+    const { limite = 10 } = req.query;
+    
+    const query = `
+        SELECT p.*, c.nombre as categoria_nombre 
+        FROM productos p 
+        LEFT JOIN categorias c ON p.categoria_id = c.id 
+        WHERE p.control_inventario = 1 
+        AND p.stock <= 10 
+        ORDER BY p.stock ASC 
+        LIMIT ?
+    `;
+    
+    db.all(query, [parseInt(limite)], (err, rows) => {
+        if (err) {
+            console.error('❌ Error obteniendo stock bajo:', err);
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        res.json(rows);
+    });
+});
+
+// 📊 RUTA PARA ESTADÍSTICAS DE STOCK
+app.get('/api/productos/estadisticas-stock', requireAuth, (req, res) => {
+    const query = `
+        SELECT 
+            COUNT(*) as total_productos,
+            SUM(CASE WHEN control_inventario = 1 THEN 1 ELSE 0 END) as con_inventario,
+            SUM(CASE WHEN control_inventario = 1 AND stock <= 10 THEN 1 ELSE 0 END) as stock_bajo,
+            SUM(CASE WHEN control_inventario = 1 AND stock <= 5 THEN 1 ELSE 0 END) as stock_critico,
+            SUM(CASE WHEN control_inventario = 1 AND stock = 0 THEN 1 ELSE 0 END) as sin_stock
+        FROM productos
+    `;
+    
+    db.all(query, (err, rows) => {
+        if (err) {
+            console.error('❌ Error estadísticas stock:', err);
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        res.json(rows[0] || {});
     });
 });
 
