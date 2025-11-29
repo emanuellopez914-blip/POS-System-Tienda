@@ -25,7 +25,7 @@ function loadApp(user) {
         app.innerHTML = `
             <div class="dashboard">
                 <header>
-                    <h1>🏪 POS Tienda - Administrador</h1>
+                    <h1>🏪 POS Tienda - ¡Bonito dia! - Administrador</h1>
                     <div class="user-info">
                         Hola, ${user.username} 
                         <button onclick="logout()">Cerrar Sesión</button>
@@ -987,11 +987,11 @@ async function finalizarCuenta() {
     
     const total = parseFloat(document.getElementById('total-carrito').textContent);
     
-    // Crear interfaz MEJORADA para ingresar pago
+    // Crear interfaz MEJORADA con métodos de pago
     const modalPago = `
         <div class="modal-pago-overlay" id="modalPagoOverlay">
-            <div class="modal-pago" style="max-width: 450px;">
-                <h3>💵 Procesar Pago</h3>
+            <div class="modal-pago" style="max-width: 500px;">
+                <h3>💳 Procesar Pago</h3>
                 
                 <div class="pago-info">
                     <div class="total-a-pagar">
@@ -1000,33 +1000,75 @@ async function finalizarCuenta() {
                     </div>
                 </div>
                 
-                <div class="pago-input">
-                    <label>Monto recibido:</label>
-                    <input type="number" id="montoRecibido" step="0.01" min="${total}" value="${total}" autofocus>
-                </div>
-                
-                <!-- 🎯 BOTONES DE MONTO RÁPIDO -->
-                <div class="montos-rapidos">
-                    <small>Monto rápido:</small>
-                    <div class="botones-montos">
-                        ${generarBotonesMontosRapidos(total)}
+                <!-- 🆕 SELECCIÓN DE MÉTODO DE PAGO -->
+                <div class="metodos-pago-container">
+                    <label>💳 Método de pago:</label>
+                    <div class="metodos-pago-grid">
+                        <div class="metodo-pago-item" data-metodo="efectivo">
+                            <div class="metodo-icon">💵</div>
+                            <div class="metodo-nombre">Efectivo</div>
+                        </div>
+                        <div class="metodo-pago-item" data-metodo="tarjeta_credito">
+                            <div class="metodo-icon">💳</div>
+                            <div class="metodo-nombre">Tarjeta Crédito</div>
+                        </div>
+                        <div class="metodo-pago-item" data-metodo="tarjeta_debito">
+                            <div class="metodo-icon">🏦</div>
+                            <div class="metodo-nombre">Tarjeta Débito</div>
+                        </div>
+                        <div class="metodo-pago-item" data-metodo="tarjeta_digital">
+                            <div class="metodo-icon">📱</div>
+                            <div class="metodo-nombre">Tarjeta Digital</div>
+                        </div>
+                        <div class="metodo-pago-item" data-metodo="transferencia">
+                            <div class="metodo-icon">🔄</div>
+                            <div class="metodo-nombre">Transferencia</div>
+                        </div>
+                        <div class="metodo-pago-item" data-metodo="cheque">
+                            <div class="metodo-icon">📄</div>
+                            <div class="metodo-nombre">Cheque</div>
+                        </div>
                     </div>
                 </div>
                 
-                <!-- 💰 RESUMEN DE CAMBIO MEJORADO -->
-                <div class="pago-resumen" id="pagoResumen">
-                    <div class="cambio-item">
-                        <span>Cambio a entregar:</span>
-                        <strong id="cambioCalculado">$0.00</strong>
+                <!-- 🎯 SECCIÓN DINÁMICA SEGÚN MÉTODO DE PAGO -->
+                <div id="seccion-pago-dinamica">
+                    <!-- Aquí se mostrará la sección específica de cada método -->
+                    <div class="seccion-efectivo">
+                        <div class="pago-input">
+                            <label>Monto recibido:</label>
+                            <input type="number" id="montoRecibido" step="0.01" min="${total}" value="${total}" autofocus>
+                        </div>
+                        
+                        <!-- BOTONES DE MONTO RÁPIDO -->
+                        <div class="montos-rapidos">
+                            <small>Monto rápido:</small>
+                            <div class="botones-montos">
+                                ${generarBotonesMontosRapidos(total)}
+                            </div>
+                        </div>
+                        
+                        <!-- RESUMEN DE CAMBIO -->
+                        <div class="pago-resumen" id="pagoResumen">
+                            <div class="cambio-item">
+                                <span>Cambio a entregar:</span>
+                                <strong id="cambioCalculado">$0.00</strong>
+                            </div>
+                            <div class="desglose-cambio" id="desgloseCambio"></div>
+                        </div>
                     </div>
-                    <div class="desglose-cambio" id="desgloseCambio">
-                        <!-- Aquí se mostrará el desglose en billetes -->
-                    </div>
+                </div>
+                
+                <!-- 🆕 CAMPO PARA REFERENCIA (para métodos que lo requieran) -->
+                <div class="referencia-pago-container" id="referenciaContainer" style="display: none;">
+                    <label id="labelReferencia">Número de transacción:</label>
+                    <input type="text" id="referenciaPago" placeholder="Ingresa el número de referencia...">
+                    <small id="helpReferencia">Opcional para llevar un mejor control</small>
                 </div>
                 
                 <div class="pago-botones">
                     <button onclick="cerrarModalPago()">Cancelar</button>
-                    <button onclick="confirmarPago(${total})" class="btn-confirmar" id="btnConfirmarPago">Confirmar Venta</button>
+                    <button onclick="confirmarPago(${total})" class="btn-confirmar" id="btnConfirmarPago">✅ Confirmar Venta</button>
                 </div>
             </div>
         </div>
@@ -1035,27 +1077,235 @@ async function finalizarCuenta() {
     // Agregar el modal al body
     document.body.insertAdjacentHTML('beforeend', modalPago);
     
-    // Configurar eventos
+    // Configurar eventos de métodos de pago
+    configurarMetodosPago(total);
+    
+    // Seleccionar efectivo por defecto y enfocar
+    seleccionarMetodoPago('efectivo');
+    document.getElementById('montoRecibido').focus();
+}
+
+// 🆕 FUNCIÓN PARA CONFIGURAR MÉTODOS DE PAGO
+// 🆕 FUNCIÓN MEJORADA PARA CONFIGURAR MÉTODOS DE PAGO
+function configurarMetodosPago(total) {
+    console.log('⚙️ Configurando métodos de pago...');
+    
+    // Eventos para selección de método
+    document.querySelectorAll('.metodo-pago-item').forEach(item => {
+        item.addEventListener('click', function() {
+            const metodo = this.getAttribute('data-metodo');
+            console.log('🎯 Clic en método:', metodo);
+            seleccionarMetodoPago(metodo);
+        });
+    });
+    
+    // Evento para monto recibido (solo efectivo)
     const montoInput = document.getElementById('montoRecibido');
+    if (montoInput) {
+        montoInput.addEventListener('input', function() {
+            console.log('💰 Cambio en monto recibido:', this.value);
+            calcularCambioMejorado(total);
+        });
+        
+        montoInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                console.log('↵ Enter presionado - confirmando pago');
+                confirmarPago(total);
+            }
+        });
+        
+        // Enfocar y seleccionar el input
+        montoInput.focus();
+        montoInput.select();
+    }
     
-    // Calcular cambio en tiempo real
-    montoInput.addEventListener('input', function() {
-        calcularCambioMejorado(total);
+    console.log('✅ Métodos de pago configurados');
+}
+
+// 🆕 FUNCIÓN PARA CAMBIAR MÉTODO DE PAGO
+// 🆕 FUNCIÓN CORREGIDA PARA CAMBIAR MÉTODO DE PAGO
+function seleccionarMetodoPago(metodo) {
+    console.log('🔘 Seleccionando método:', metodo);
+    
+    // Remover selección anterior
+    document.querySelectorAll('.metodo-pago-item').forEach(item => {
+        item.classList.remove('seleccionado');
     });
     
-    // Permitir Enter para confirmar
-    montoInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            confirmarPago(total);
+    // Seleccionar nuevo método
+    const elementoSeleccionado = document.querySelector(`[data-metodo="${metodo}"]`);
+    if (elementoSeleccionado) {
+        elementoSeleccionado.classList.add('seleccionado');
+        console.log('✅ Método seleccionado visualmente:', metodo);
+    } else {
+        console.error('❌ No se encontró el elemento del método:', metodo);
+        return;
+    }
+    
+    // Actualizar interfaz según método
+    actualizarInterfazPorMetodo(metodo);
+}
+
+// 🆕 FUNCIÓN PARA ACTUALIZAR INTERFAZ SEGÚN MÉTODO
+// 🆕 FUNCIÓN MEJORADA PARA ACTUALIZAR INTERFAZ SEGÚN MÉTODO
+function actualizarInterfazPorMetodo(metodo) {
+    console.log('🔄 Actualizando interfaz para método:', metodo);
+    
+    const seccionDinamica = document.getElementById('seccion-pago-dinamica');
+    const referenciaContainer = document.getElementById('referenciaContainer');
+    const btnConfirmar = document.getElementById('btnConfirmarPago');
+    
+    if (!seccionDinamica || !referenciaContainer || !btnConfirmar) {
+        console.error('❌ Elementos del modal no encontrados');
+        return;
+    }
+    
+    // Configuraciones por método
+    const configMetodos = {
+        efectivo: {
+            html: `
+                <div class="seccion-efectivo">
+                    <div class="pago-input">
+                        <label>Monto recibido:</label>
+                        <input type="number" id="montoRecibido" step="0.01" min="0" value="${parseFloat(document.getElementById('total-carrito').textContent).toFixed(2)}" autofocus>
+                    </div>
+                    
+                    <div class="montos-rapidos">
+                        <small>Monto rápido:</small>
+                        <div class="botones-montos">
+                            ${generarBotonesMontosRapidos(parseFloat(document.getElementById('total-carrito').textContent))}
+                        </div>
+                    </div>
+                    
+                    <div class="pago-resumen" id="pagoResumen">
+                        <div class="cambio-item">
+                            <span>Cambio a entregar:</span>
+                            <strong id="cambioCalculado">$0.00</strong>
+                        </div>
+                        <div class="desglose-cambio" id="desgloseCambio"></div>
+                    </div>
+                </div>
+            `,
+            referencia: false,
+            btnTexto: '✅ Confirmar Venta'
+        },
+        tarjeta_credito: {
+            html: `
+                <div class="seccion-tarjeta">
+                    <p>💳 <strong>Tarjeta de Crédito</strong></p>
+                    <p>Total: <strong>$${parseFloat(document.getElementById('total-carrito').textContent).toFixed(2)}</strong></p>
+                    <small>Desliza o inserta la tarjeta en el terminal</small>
+                </div>
+            `,
+            referencia: true,
+            label: 'Número de autorización:',
+            help: 'Número de autorización de la transacción',
+            btnTexto: '✅ Confirmar Pago con Tarjeta'
+        },
+        tarjeta_debito: {
+            html: `
+                <div class="seccion-tarjeta">
+                    <p>🏦 <strong>Tarjeta de Débito</strong></p>
+                    <p>Total: <strong>$${parseFloat(document.getElementById('total-carrito').textContent).toFixed(2)}</strong></p>
+                    <small>Desliza o inserta la tarjeta en el terminal</small>
+                </div>
+            `,
+            referencia: true,
+            label: 'Número de autorización:',
+            help: 'Número de autorización de la transacción',
+            btnTexto: '✅ Confirmar Pago con Tarjeta'
+        },
+        tarjeta_digital: {
+            html: `
+                <div class="seccion-digital">
+                    <p>📱 <strong>Tarjeta Digital</strong></p>
+                    <p>Total: <strong>$${parseFloat(document.getElementById('total-carrito').textContent).toFixed(2)}</strong></p>
+                    <small>Escanea el código QR o usa tu app de pagos</small>
+                </div>
+            `,
+            referencia: true,
+            label: 'Referencia del pago:',
+            help: 'Número de referencia de la transacción digital',
+            btnTexto: '✅ Confirmar Pago Digital'
+        },
+        transferencia: {
+            html: `
+                <div class="seccion-transferencia">
+                    <p>🔄 <strong>Transferencia Bancaria</strong></p>
+                    <p>Total: <strong>$${parseFloat(document.getElementById('total-carrito').textContent).toFixed(2)}</strong></p>
+                    <small>Proporciona los datos bancarios al cliente</small>
+                </div>
+            `,
+            referencia: true,
+            label: 'Número de transferencia:',
+            help: 'Número de referencia de la transferencia',
+            btnTexto: '✅ Confirmar Transferencia'
+        },
+        cheque: {
+            html: `
+                <div class="seccion-cheque">
+                    <p>📄 <strong>Cheque</strong></p>
+                    <p>Total: <strong>$${parseFloat(document.getElementById('total-carrito').textContent).toFixed(2)}</strong></p>
+                    <small>Verifica los datos del cheque antes de aceptarlo</small>
+                </div>
+            `,
+            referencia: true,
+            label: 'Número de cheque:',
+            help: 'Número del cheque para control',
+            btnTexto: '✅ Confirmar Pago con Cheque'
         }
-    });
+    };
     
-    // Enfocar y seleccionar todo el texto
-    montoInput.focus();
-    montoInput.select();
+    const config = configMetodos[metodo];
     
-    // Calcular cambio inicial
-    calcularCambioMejorado(total);
+    if (!config) {
+        console.error('❌ Configuración no encontrada para método:', metodo);
+        return;
+    }
+    
+    // Actualizar sección dinámica
+    seccionDinamica.innerHTML = config.html;
+    console.log('✅ Sección dinámica actualizada');
+    
+    // Mostrar/ocultar referencia
+    if (config.referencia) {
+        referenciaContainer.style.display = 'block';
+        document.getElementById('labelReferencia').textContent = config.label;
+        document.getElementById('helpReferencia').textContent = config.help;
+        document.getElementById('referenciaPago').placeholder = config.help;
+        console.log('✅ Referencia mostrada para:', metodo);
+    } else {
+        referenciaContainer.style.display = 'none';
+        console.log('✅ Referencia ocultada para:', metodo);
+    }
+    
+    // Actualizar botón de confirmación
+    btnConfirmar.innerHTML = config.btnTexto;
+    console.log('✅ Botón actualizado:', config.btnTexto);
+    
+    // Configurar eventos si es efectivo
+    if (metodo === 'efectivo') {
+        setTimeout(() => {
+            const montoInput = document.getElementById('montoRecibido');
+            const total = parseFloat(document.getElementById('total-carrito').textContent);
+            
+            if (montoInput) {
+                montoInput.value = total;
+                montoInput.focus();
+                montoInput.select();
+                
+                montoInput.addEventListener('input', function() {
+                    calcularCambioMejorado(total);
+                });
+                
+                // Calcular cambio inicial
+                calcularCambioMejorado(total);
+                console.log('✅ Eventos de efectivo configurados');
+            }
+        }, 100);
+    }
+    
+    console.log('✅ Interfaz actualizada correctamente para:', metodo);
 }
 
 // 🎯 FUNCIÓN PARA GENERAR BOTONES DE MONTO RÁPIDO
@@ -1191,62 +1441,118 @@ function generarDesgloseCambio(cambio) {
     return desgloseHTML;
 }
 
-// ✅ ACTUALIZA LA FUNCIÓN confirmarPago (solo el mensaje final):
 async function confirmarPago(total) {
-    const montoRecibido = parseFloat(document.getElementById('montoRecibido').value);
-    const cambio = montoRecibido - total;
+    console.log('🎯 Iniciando confirmación de pago...');
     
-    if (isNaN(montoRecibido) || montoRecibido <= 0) {
-        alert('Monto inválido');
+    const metodoSeleccionado = document.querySelector('.metodo-pago-item.seleccionado');
+    if (!metodoSeleccionado) {
+        alert('❌ Selecciona un método de pago');
+        console.error('❌ No hay método de pago seleccionado');
         return;
     }
     
-    if (montoRecibido < total) {
-        alert(`El pago ($${montoRecibido.toFixed(2)}) es menor al total ($${total.toFixed(2)})`);
-        return;
+    const metodo = metodoSeleccionado.getAttribute('data-metodo');
+    console.log('💳 Método seleccionado:', metodo);
+    
+    let montoRecibido = total;
+    let cambio = 0;
+    let referencia = '';
+    
+    // Validaciones específicas por método
+    if (metodo === 'efectivo') {
+        const montoInput = document.getElementById('montoRecibido');
+        if (!montoInput) {
+            alert('❌ Error: Campo de monto no encontrado');
+            console.error('❌ Input montoRecibido no encontrado');
+            return;
+        }
+        
+        montoRecibido = parseFloat(montoInput.value);
+        cambio = montoRecibido - total;
+        
+        console.log('💰 Monto recibido:', montoRecibido, 'Cambio:', cambio);
+        
+        if (isNaN(montoRecibido) || montoRecibido <= 0) {
+            alert('❌ Monto inválido');
+            return;
+        }
+        
+        if (montoRecibido < total) {
+            alert(`❌ El pago ($${montoRecibido.toFixed(2)}) es menor al total ($${total.toFixed(2)})`);
+            return;
+        }
+    } else {
+        // Para otros métodos, el monto recibido es exactamente el total
+        montoRecibido = total;
+        cambio = 0;
+        
+        // Obtener referencia si existe
+        const referenciaInput = document.getElementById('referenciaPago');
+        if (referenciaInput) {
+            referencia = referenciaInput.value.trim();
+            console.log('📝 Referencia capturada:', referencia);
+        }
     }
     
     // Cerrar modal
     cerrarModalPago();
+    console.log('✅ Modal cerrado, procediendo con registro...');
     
     // Proceder con el registro de la venta
     try {
+        const ventaData = {
+            total: total,
+            productos: window.carritoCobro,
+            pago_recibido: montoRecibido,
+            cambio: cambio,
+            metodo_pago: metodo,
+            referencia_pago: referencia || null
+        };
+        
+        console.log('📦 Datos de venta a enviar:', ventaData);
+        
         const response = await fetch('/api/ventas', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                total: total,
-                productos: window.carritoCobro,
-                pago_recibido: montoRecibido,
-                cambio: cambio
-            })
+            body: JSON.stringify(ventaData)
         });
         
         const data = await response.json();
+        console.log('📨 Respuesta del servidor:', data);
         
         if (response.ok) {
-            // Mostrar mensaje con el cambio de forma más clara
-            const mensajeCambio = cambio > 0 ? 
-                `✅ Venta registrada - ENTREGAR CAMBIO: $${cambio.toFixed(2)}` :
-                '✅ Venta registrada - Pago exacto';
-                
-            mostrarMensajeCobro(mensajeCambio, 'success');
-            
-            // Alertar sobre el cambio a entregar (solo si hay cambio)
-            if (cambio > 0) {
+            // Mensaje específico por método
+            let mensajeExito = '';
+            if (metodo === 'efectivo' && cambio > 0) {
+                mensajeExito = `✅ Venta registrada - ENTREGAR CAMBIO: $${cambio.toFixed(2)}`;
                 setTimeout(() => {
                     alert(`💵 ENTREGAR AL CLIENTE:\nCambio: $${cambio.toFixed(2)}`);
                 }, 500);
+            } else if (metodo === 'efectivo') {
+                mensajeExito = '✅ Venta registrada - Pago exacto';
+            } else {
+                const nombresMetodos = {
+                    'tarjeta_credito': 'Tarjeta de Crédito',
+                    'tarjeta_debito': 'Tarjeta de Débito', 
+                    'tarjeta_digital': 'Tarjeta Digital',
+                    'transferencia': 'Transferencia',
+                    'cheque': 'Cheque'
+                };
+                mensajeExito = `✅ Venta registrada - ${nombresMetodos[metodo]}`;
             }
+                
+            mostrarMensajeCobro(mensajeExito, 'success');
+            console.log('✅ Venta registrada exitosamente');
             
             // Limpiar carrito
             window.carritoCobro = [];
             actualizarCarritoCobro();
         } else {
             mostrarMensajeCobro('Error: ' + data.error, 'error');
+            console.error('❌ Error del servidor:', data.error);
         }
     } catch (error) {
-        console.error('Error finalizando cuenta:', error);
+        console.error('❌ Error finalizando cuenta:', error);
         mostrarMensajeCobro('Error de conexión: ' + error.message, 'error');
     }
 }
@@ -2325,21 +2631,20 @@ async function cargarVentasPorRango(fechaInicio, fechaFin, periodoNombre) {
 function mostrarListaVentas(ventas, fecha) {
     const contenido = document.getElementById('contenido-ventas');
 
-     // ✅ CORREGIR: Usar función de formateo profesional
-     let fechaDisplay = fecha;
-     if (fecha) {
-         // Si es una fecha específica, formatearla correctamente
-         const fechaObj = new Date(fecha + 'T00:00:00-06:00'); // Horario México
-         fechaDisplay = fechaObj.toLocaleDateString('es-MX', {
-             weekday: 'long',
-             year: 'numeric',
-             month: 'long',
-             day: 'numeric',
-             timeZone: 'America/Mexico_City'
-         });
-     }
+    // ✅ CORREGIR: Usar función de formateo profesional
+    let fechaDisplay = fecha;
+    if (fecha) {
+        const fechaObj = new Date(fecha + 'T00:00:00-06:00');
+        fechaDisplay = fechaObj.toLocaleDateString('es-MX', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            timeZone: 'America/Mexico_City'
+        });
+    }
     
-     let html = `
+    let html = `
         <div class="lista-ventas-container">
             <div class="ventas-header-with-back">
                 <h3>📋 ${fecha ? `Ventas del ${fechaDisplay}` : 'Todas las Ventas'}</h3>
@@ -2356,8 +2661,10 @@ function mostrarListaVentas(ventas, fecha) {
         html += `<div class="no-ventas">No hay ventas para mostrar</div>`;
     } else {
         ventas.forEach(venta => {
-            // ✅ USAR FECHA FORMATEADA DEL BACKEND
             const fechaVenta = venta.fecha_formateada || 'Fecha no disponible';
+            
+            // 🆕 ICONO Y TEXTO DEL MÉTODO DE PAGO
+            const metodoPagoInfo = obtenerInfoMetodoPago(venta.metodo_pago);
             
             html += `
                 <div class="venta-item">
@@ -2369,10 +2676,17 @@ function mostrarListaVentas(ventas, fecha) {
                         <div class="venta-usuario">Cajero: ${venta.usuario_nombre || 'N/A'}</div>
                         <div class="venta-total">Total: $${venta.total.toFixed(2)}</div>
                     </div>
-                    <div class="venta-productos">
-                        ${venta.productos_vendidos.map(p => 
-                            `${p.cantidad}x ${p.nombre}`
-                        ).join(', ')}
+                    <div class="venta-detalles">
+                        <div class="venta-metodo-pago ${metodoPagoInfo.clase}">
+                            <span class="metodo-icon">${metodoPagoInfo.icono}</span>
+                            <span class="metodo-texto">${metodoPagoInfo.texto}</span>
+                            ${venta.referencia_pago ? `<small class="referencia">Ref: ${venta.referencia_pago}</small>` : ''}
+                        </div>
+                        <div class="venta-productos">
+                            ${venta.productos_vendidos.map(p => 
+                                `${p.cantidad}x ${p.nombre}`
+                            ).join(', ')}
+                        </div>
                     </div>
                     <div class="venta-actions">
                         <button class="btn-reimprimir" onclick="reimprimirTicket(${venta.id})">🖨️ Reimprimir Ticket</button>
@@ -2384,6 +2698,48 @@ function mostrarListaVentas(ventas, fecha) {
     
     html += `</div></div>`;
     contenido.innerHTML = html;
+}
+
+// 🆕 FUNCIÓN PARA OBTENER INFORMACIÓN DEL MÉTODO DE PAGO
+function obtenerInfoMetodoPago(metodo) {
+    const metodos = {
+        efectivo: {
+            icono: '💵',
+            texto: 'Efectivo',
+            clase: 'metodo-efectivo'
+        },
+        tarjeta_credito: {
+            icono: '💳',
+            texto: 'Tarjeta Crédito',
+            clase: 'metodo-tarjeta'
+        },
+        tarjeta_debito: {
+            icono: '🏦',
+            texto: 'Tarjeta Débito',
+            clase: 'metodo-tarjeta'
+        },
+        tarjeta_digital: {
+            icono: '📱',
+            texto: 'Tarjeta Digital',
+            clase: 'metodo-digital'
+        },
+        transferencia: {
+            icono: '🔄',
+            texto: 'Transferencia',
+            clase: 'metodo-transferencia'
+        },
+        cheque: {
+            icono: '📄',
+            texto: 'Cheque',
+            clase: 'metodo-cheque'
+        }
+    };
+    
+    return metodos[metodo] || {
+        icono: '❓',
+        texto: 'No especificado',
+        clase: 'metodo-desconocido'
+    };
 }
 
 // Función para reimprimir ticket (placeholder)

@@ -82,6 +82,8 @@ db.serialize(() => {
         productos_vendidos TEXT,
         pago_recibido REAL,        -- NUEVO: Monto recibido del cliente
         cambio REAL,               -- NUEVO: Cambio entregado
+        metodo_pago TEXT DEFAULT 'efectivo',  -- 🆕 NUEVA COLUMNA
+        referencia_pago TEXT,                 -- 🆕 Para números de transacción
         FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
     )`);
 
@@ -180,16 +182,15 @@ db.all("PRAGMA table_info(ventas)", (err, rows) => {
     console.log('📋 Columnas existentes en ventas:', columnasExistentes);
 
     // Columnas que necesitamos
-    const columnasNecesarias = ['pago_recibido', 'cambio'];
+    const columnasNecesarias = ['pago_recibido', 'cambio', 'metodo_pago', 'referencia_pago'];
     const columnasFaltantes = columnasNecesarias.filter(col => !columnasExistentes.includes(col));
 
     if (columnasFaltantes.length > 0) {
         console.log('🔄 Agregando columnas faltantes:', columnasFaltantes);
         
         columnasFaltantes.forEach(columna => {
-            let tipoDato = 'REAL';
-            if (columna === 'pago_recibido') tipoDato = 'REAL';
-            if (columna === 'cambio') tipoDato = 'REAL';
+            let tipoDato = 'TEXT';
+            if (columna === 'pago_recibido' || columna === 'cambio') tipoDato = 'REAL';
             
             db.run(`ALTER TABLE ventas ADD COLUMN ${columna} ${tipoDato}`, (err) => {
                 if (err) {
@@ -1146,6 +1147,23 @@ app.get('/api/ventas/reporte/tendencias', requireAuth, (req, res) => {
             total_periodo: totalPeriodo,
             promedio_diario: promedioDiario,
             mejor_dia: mejorDia
+        });
+    });
+});
+
+// 🆕 RUTA PARA ACTUALIZAR VENTAS ANTIGUAS (solo ejecutar una vez)
+app.get('/api/actualizar-metodos-pago', requireAuth, (req, res) => {
+    // Actualizar todas las ventas antiguas que no tengan método de pago
+    db.run("UPDATE ventas SET metodo_pago = 'efectivo' WHERE metodo_pago IS NULL", function(err) {
+        if (err) {
+            console.error('❌ Error actualizando métodos de pago:', err);
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        
+        console.log(`✅ Ventas actualizadas: ${this.changes}`);
+        res.json({ 
+            mensaje: `Se actualizaron ${this.changes} ventas con método de pago efectivo` 
         });
     });
 });
