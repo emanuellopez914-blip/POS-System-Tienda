@@ -1160,6 +1160,9 @@ function actualizarInterfazPorMetodo(metodo) {
         return;
     }
     
+    // 🆕 CORREGIDO: Obtener el total del carrito desde el botón de finalizar
+    const totalCarrito = parseFloat(document.querySelector('.total-carrito span').textContent);
+    
     // Configuraciones por método
     const configMetodos = {
         efectivo: {
@@ -1167,13 +1170,13 @@ function actualizarInterfazPorMetodo(metodo) {
                 <div class="seccion-efectivo">
                     <div class="pago-input">
                         <label>Monto recibido:</label>
-                        <input type="number" id="montoRecibido" step="0.01" min="0" value="${parseFloat(document.getElementById('total-carrito').textContent).toFixed(2)}" autofocus>
+                        <input type="number" id="montoRecibido" step="0.01" min="0" value="${totalCarrito.toFixed(2)}" autofocus>
                     </div>
                     
                     <div class="montos-rapidos">
                         <small>Monto rápido:</small>
                         <div class="botones-montos">
-                            ${generarBotonesMontosRapidos(parseFloat(document.getElementById('total-carrito').textContent))}
+                            ${generarBotonesMontosRapidos(totalCarrito)}
                         </div>
                     </div>
                     
@@ -1193,7 +1196,7 @@ function actualizarInterfazPorMetodo(metodo) {
             html: `
                 <div class="seccion-tarjeta">
                     <p>💳 <strong>Tarjeta de Crédito</strong></p>
-                    <p>Total: <strong>$${parseFloat(document.getElementById('total-carrito').textContent).toFixed(2)}</strong></p>
+                    <p>Total: <strong>$${totalCarrito.toFixed(2)}</strong></p>
                     <small>Desliza o inserta la tarjeta en el terminal</small>
                 </div>
             `,
@@ -1206,7 +1209,7 @@ function actualizarInterfazPorMetodo(metodo) {
             html: `
                 <div class="seccion-tarjeta">
                     <p>🏦 <strong>Tarjeta de Débito</strong></p>
-                    <p>Total: <strong>$${parseFloat(document.getElementById('total-carrito').textContent).toFixed(2)}</strong></p>
+                    <p>Total: <strong>$${totalCarrito.toFixed(2)}</strong></p>
                     <small>Desliza o inserta la tarjeta en el terminal</small>
                 </div>
             `,
@@ -1219,7 +1222,7 @@ function actualizarInterfazPorMetodo(metodo) {
             html: `
                 <div class="seccion-digital">
                     <p>📱 <strong>Tarjeta Digital</strong></p>
-                    <p>Total: <strong>$${parseFloat(document.getElementById('total-carrito').textContent).toFixed(2)}</strong></p>
+                    <p>Total: <strong>$${totalCarrito.toFixed(2)}</strong></p>
                     <small>Escanea el código QR o usa tu app de pagos</small>
                 </div>
             `,
@@ -1232,7 +1235,7 @@ function actualizarInterfazPorMetodo(metodo) {
             html: `
                 <div class="seccion-transferencia">
                     <p>🔄 <strong>Transferencia Bancaria</strong></p>
-                    <p>Total: <strong>$${parseFloat(document.getElementById('total-carrito').textContent).toFixed(2)}</strong></p>
+                    <p>Total: <strong>$${totalCarrito.toFixed(2)}</strong></p>
                     <small>Proporciona los datos bancarios al cliente</small>
                 </div>
             `,
@@ -1245,7 +1248,7 @@ function actualizarInterfazPorMetodo(metodo) {
             html: `
                 <div class="seccion-cheque">
                     <p>📄 <strong>Cheque</strong></p>
-                    <p>Total: <strong>$${parseFloat(document.getElementById('total-carrito').textContent).toFixed(2)}</strong></p>
+                    <p>Total: <strong>$${totalCarrito.toFixed(2)}</strong></p>
                     <small>Verifica los datos del cheque antes de aceptarlo</small>
                 </div>
             `,
@@ -1287,19 +1290,18 @@ function actualizarInterfazPorMetodo(metodo) {
     if (metodo === 'efectivo') {
         setTimeout(() => {
             const montoInput = document.getElementById('montoRecibido');
-            const total = parseFloat(document.getElementById('total-carrito').textContent);
             
             if (montoInput) {
-                montoInput.value = total;
+                montoInput.value = totalCarrito;
                 montoInput.focus();
                 montoInput.select();
                 
                 montoInput.addEventListener('input', function() {
-                    calcularCambioMejorado(total);
+                    calcularCambioMejorado(totalCarrito);
                 });
                 
                 // Calcular cambio inicial
-                calcularCambioMejorado(total);
+                calcularCambioMejorado(totalCarrito);
                 console.log('✅ Eventos de efectivo configurados');
             }
         }, 100);
