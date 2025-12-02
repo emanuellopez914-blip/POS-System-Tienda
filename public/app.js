@@ -987,7 +987,7 @@ async function finalizarCuenta() {
     
     const total = parseFloat(document.getElementById('total-carrito').textContent);
     
-    // Crear interfaz MEJORADA con métodos de pago
+    // ✅ CORRECCIÓN: Asegurar que el HTML del modal incluya la sección de referencia
     const modalPago = `
         <div class="modal-pago-overlay" id="modalPagoOverlay">
             <div class="modal-pago" style="max-width: 500px;">
@@ -1000,7 +1000,7 @@ async function finalizarCuenta() {
                     </div>
                 </div>
                 
-                <!-- 🆕 SELECCIÓN DE MÉTODO DE PAGO -->
+                <!-- Métodos de pago -->
                 <div class="metodos-pago-container">
                     <label>💳 Método de pago:</label>
                     <div class="metodos-pago-grid">
@@ -1031,38 +1031,15 @@ async function finalizarCuenta() {
                     </div>
                 </div>
                 
-                <!-- 🎯 SECCIÓN DINÁMICA SEGÚN MÉTODO DE PAGO -->
+                <!-- Sección dinámica -->
                 <div id="seccion-pago-dinamica">
-                    <!-- Aquí se mostrará la sección específica de cada método -->
-                    <div class="seccion-efectivo">
-                        <div class="pago-input">
-                            <label>Monto recibido:</label>
-                            <input type="number" id="montoRecibido" step="0.01" min="${total}" value="${total}" autofocus>
-                        </div>
-                        
-                        <!-- BOTONES DE MONTO RÁPIDO -->
-                        <div class="montos-rapidos">
-                            <small>Monto rápido:</small>
-                            <div class="botones-montos">
-                                ${generarBotonesMontosRapidos(total)}
-                            </div>
-                        </div>
-                        
-                        <!-- RESUMEN DE CAMBIO -->
-                        <div class="pago-resumen" id="pagoResumen">
-                            <div class="cambio-item">
-                                <span>Cambio a entregar:</span>
-                                <strong id="cambioCalculado">$0.00</strong>
-                            </div>
-                            <div class="desglose-cambio" id="desgloseCambio"></div>
-                        </div>
-                    </div>
+                    <!-- Se llenará dinámicamente -->
                 </div>
                 
-                <!-- 🆕 CAMPO PARA REFERENCIA (para métodos que lo requieran) -->
+                <!-- ✅ CORRECCIÓN: Asegurar que la sección de referencia esté presente -->
                 <div class="referencia-pago-container" id="referenciaContainer" style="display: none;">
-                    <label id="labelReferencia">Número de transacción:</label>
-                    <input type="text" id="referenciaPago" placeholder="Ingresa el número de referencia...">
+                    <label id="labelReferencia">Número de referencia:</label>
+                    <input type="text" id="referenciaPago" placeholder="Ingresa el número de referencia..." autocomplete="off">
                     <small id="helpReferencia">Opcional para llevar un mejor control</small>
                 </div>
                 
@@ -1080,9 +1057,8 @@ async function finalizarCuenta() {
     // Configurar eventos de métodos de pago
     configurarMetodosPago(total);
     
-    // Seleccionar efectivo por defecto y enfocar
+    // Seleccionar efectivo por defecto
     seleccionarMetodoPago('efectivo');
-    document.getElementById('montoRecibido').focus();
 }
 
 // 🆕 FUNCIÓN PARA CONFIGURAR MÉTODOS DE PAGO
@@ -1147,7 +1123,7 @@ function seleccionarMetodoPago(metodo) {
 }
 
 // 🆕 FUNCIÓN PARA ACTUALIZAR INTERFAZ SEGÚN MÉTODO
-// 🆕 FUNCIÓN MEJORADA PARA ACTUALIZAR INTERFAZ SEGÚN MÉTODO
+// 🆕 FUNCIÓN COMPLETAMENTE CORREGIDA
 function actualizarInterfazPorMetodo(metodo) {
     console.log('🔄 Actualizando interfaz para método:', metodo);
     
@@ -1155,13 +1131,14 @@ function actualizarInterfazPorMetodo(metodo) {
     const referenciaContainer = document.getElementById('referenciaContainer');
     const btnConfirmar = document.getElementById('btnConfirmarPago');
     
-    if (!seccionDinamica || !referenciaContainer || !btnConfirmar) {
+    if (!seccionDinamica || !btnConfirmar) {
         console.error('❌ Elementos del modal no encontrados');
         return;
     }
     
-    // 🆕 CORREGIDO: Obtener el total del carrito desde el botón de finalizar
-    const totalCarrito = parseFloat(document.querySelector('.total-carrito span').textContent);
+    // Obtener el total del carrito
+    const totalCarrito = parseFloat(document.querySelector('#total-carrito').textContent) || 0;
+    console.log('💰 Total del carrito:', totalCarrito);
     
     // Configuraciones por método
     const configMetodos = {
@@ -1202,7 +1179,7 @@ function actualizarInterfazPorMetodo(metodo) {
             `,
             referencia: true,
             label: 'Número de autorización:',
-            help: 'Número de autorización de la transacción',
+            help: 'Ingresa el número de autorización de la transacción',
             btnTexto: '✅ Confirmar Pago con Tarjeta'
         },
         tarjeta_debito: {
@@ -1215,7 +1192,7 @@ function actualizarInterfazPorMetodo(metodo) {
             `,
             referencia: true,
             label: 'Número de autorización:',
-            help: 'Número de autorización de la transacción',
+            help: 'Ingresa el número de autorización de la transacción',
             btnTexto: '✅ Confirmar Pago con Tarjeta'
         },
         tarjeta_digital: {
@@ -1228,7 +1205,7 @@ function actualizarInterfazPorMetodo(metodo) {
             `,
             referencia: true,
             label: 'Referencia del pago:',
-            help: 'Número de referencia de la transacción digital',
+            help: 'Ingresa el número de referencia de la transacción digital',
             btnTexto: '✅ Confirmar Pago Digital'
         },
         transferencia: {
@@ -1241,7 +1218,7 @@ function actualizarInterfazPorMetodo(metodo) {
             `,
             referencia: true,
             label: 'Número de transferencia:',
-            help: 'Número de referencia de la transferencia',
+            help: 'Ingresa el número de referencia de la transferencia',
             btnTexto: '✅ Confirmar Transferencia'
         },
         cheque: {
@@ -1254,60 +1231,79 @@ function actualizarInterfazPorMetodo(metodo) {
             `,
             referencia: true,
             label: 'Número de cheque:',
-            help: 'Número del cheque para control',
+            help: 'Ingresa el número del cheque para control',
             btnTexto: '✅ Confirmar Pago con Cheque'
         }
     };
     
-    const config = configMetodos[metodo];
-    
-    if (!config) {
-        console.error('❌ Configuración no encontrada para método:', metodo);
-        return;
-    }
+    const config = configMetodos[metodo] || configMetodos.efectivo;
     
     // Actualizar sección dinámica
     seccionDinamica.innerHTML = config.html;
     console.log('✅ Sección dinámica actualizada');
     
-    // Mostrar/ocultar referencia
-    if (config.referencia) {
-        referenciaContainer.style.display = 'block';
-        document.getElementById('labelReferencia').textContent = config.label;
-        document.getElementById('helpReferencia').textContent = config.help;
-        document.getElementById('referenciaPago').placeholder = config.help;
-        console.log('✅ Referencia mostrada para:', metodo);
-    } else {
-        referenciaContainer.style.display = 'none';
-        console.log('✅ Referencia ocultada para:', metodo);
+    // ✅ CORRECCIÓN CRÍTICA: Mostrar/ocultar referencia
+    if (referenciaContainer) {
+        if (config.referencia) {
+            referenciaContainer.style.display = 'block';
+            // Asegurar que los elementos existen antes de asignar
+            const labelReferencia = document.getElementById('labelReferencia');
+            const helpReferencia = document.getElementById('helpReferencia');
+            const inputReferencia = document.getElementById('referenciaPago');
+            
+            if (labelReferencia) labelReferencia.textContent = config.label;
+            if (helpReferencia) helpReferencia.textContent = config.help;
+            if (inputReferencia) {
+                inputReferencia.value = ''; // Limpiar valor anterior
+                inputReferencia.placeholder = config.help;
+                inputReferencia.required = true; // Hacer obligatorio
+            }
+            console.log('✅ Referencia mostrada para:', metodo);
+        } else {
+            referenciaContainer.style.display = 'none';
+            // Limpiar el campo cuando no se necesita
+            const inputReferencia = document.getElementById('referenciaPago');
+            if (inputReferencia) {
+                inputReferencia.value = '';
+                inputReferencia.required = false;
+            }
+            console.log('✅ Referencia ocultada para:', metodo);
+        }
     }
     
     // Actualizar botón de confirmación
     btnConfirmar.innerHTML = config.btnTexto;
-    console.log('✅ Botón actualizado:', config.btnTexto);
+    btnConfirmar.disabled = false; // Asegurar que no esté deshabilitado
     
-    // Configurar eventos si es efectivo
+    // ✅ CORRECCIÓN: Configurar eventos SI ES EFECTIVO
     if (metodo === 'efectivo') {
         setTimeout(() => {
             const montoInput = document.getElementById('montoRecibido');
-            
             if (montoInput) {
-                montoInput.value = totalCarrito;
                 montoInput.focus();
                 montoInput.select();
                 
+                // Calcular cambio inicial
+                calcularCambioMejorado(totalCarrito);
+                
+                // Configurar evento para calcular cambio en tiempo real
                 montoInput.addEventListener('input', function() {
                     calcularCambioMejorado(totalCarrito);
                 });
-                
-                // Calcular cambio inicial
-                calcularCambioMejorado(totalCarrito);
-                console.log('✅ Eventos de efectivo configurados');
             }
-        }, 100);
+        }, 50);
+    } else {
+        // ✅ PARA MÉTODOS NO-EFECTIVO: NO MOSTRAR CAMBIO
+        const pagoResumen = document.getElementById('pagoResumen');
+        if (pagoResumen) {
+            pagoResumen.innerHTML = `
+                <div class="cambio-item sin-cambio">
+                    <span>Pago exacto:</span>
+                    <strong>$${totalCarrito.toFixed(2)}</strong>
+                </div>
+            `;
+        }
     }
-    
-    console.log('✅ Interfaz actualizada correctamente para:', metodo);
 }
 
 // 🎯 FUNCIÓN PARA GENERAR BOTONES DE MONTO RÁPIDO
@@ -1443,76 +1439,78 @@ function generarDesgloseCambio(cambio) {
     return desgloseHTML;
 }
 
+// 📋 REEMPLAZA LA FUNCIÓN confirmarPago() COMPLETAMENTE CON ESTA VERSIÓN CORREGIDA:
+
+// 📋 REEMPLAZA LA FUNCIÓN confirmarPago() COMPLETAMENTE CON ESTA VERSIÓN SIMPLIFICADA:
 async function confirmarPago(total) {
-    console.log('🎯 Iniciando confirmación de pago...');
+    console.log('🎯 confirmarPago() INICIADA - Total:', total);
     
+    // 1. Verificar que hay productos en el carrito
+    if (!window.carritoCobro || window.carritoCobro.length === 0) {
+        alert('❌ El carrito está vacío');
+        return;
+    }
+    
+    // 2. Obtener método de pago seleccionado
     const metodoSeleccionado = document.querySelector('.metodo-pago-item.seleccionado');
     if (!metodoSeleccionado) {
         alert('❌ Selecciona un método de pago');
-        console.error('❌ No hay método de pago seleccionado');
         return;
     }
     
     const metodo = metodoSeleccionado.getAttribute('data-metodo');
     console.log('💳 Método seleccionado:', metodo);
     
+    // 3. Preparar datos según el método de pago
     let montoRecibido = total;
     let cambio = 0;
-    let referencia = '';
+    let referencia = null;
     
-    // Validaciones específicas por método
     if (metodo === 'efectivo') {
         const montoInput = document.getElementById('montoRecibido');
-        if (!montoInput) {
-            alert('❌ Error: Campo de monto no encontrado');
-            console.error('❌ Input montoRecibido no encontrado');
-            return;
-        }
-        
-        montoRecibido = parseFloat(montoInput.value);
-        cambio = montoRecibido - total;
-        
-        console.log('💰 Monto recibido:', montoRecibido, 'Cambio:', cambio);
-        
-        if (isNaN(montoRecibido) || montoRecibido <= 0) {
-            alert('❌ Monto inválido');
-            return;
-        }
-        
-        if (montoRecibido < total) {
-            alert(`❌ El pago ($${montoRecibido.toFixed(2)}) es menor al total ($${total.toFixed(2)})`);
-            return;
+        if (montoInput) {
+            montoRecibido = parseFloat(montoInput.value) || total;
+            cambio = montoRecibido - total;
+            
+            if (cambio < 0) {
+                alert(`❌ Pago insuficiente. Faltan: $${Math.abs(cambio).toFixed(2)}`);
+                return;
+            }
         }
     } else {
-        // Para otros métodos, el monto recibido es exactamente el total
-        montoRecibido = total;
-        cambio = 0;
-        
-        // Obtener referencia si existe
+        // Para métodos no-efectivo, obtener referencia si existe
         const referenciaInput = document.getElementById('referenciaPago');
         if (referenciaInput) {
-            referencia = referenciaInput.value.trim();
-            console.log('📝 Referencia capturada:', referencia);
+            referencia = referenciaInput.value.trim() || null;
         }
     }
     
-    // Cerrar modal
-    cerrarModalPago();
-    console.log('✅ Modal cerrado, procediendo con registro...');
+    // 4. Preparar datos de la venta
+    const ventaData = {
+        total: total,
+        productos: window.carritoCobro.map(item => ({
+            id: item.id,
+            nombre: item.nombre,
+            precio: item.precio,
+            cantidad: item.cantidad,
+            control_inventario: item.control_inventario
+        })),
+        pago_recibido: montoRecibido,
+        cambio: cambio,
+        metodo_pago: metodo,  // ← IMPORTANTE: Usar el método real seleccionado
+        referencia_pago: referencia
+    };
     
-    // Proceder con el registro de la venta
+    console.log('📤 Datos a enviar:', ventaData);
+    
+    // 5. Cerrar modal
+    cerrarModalPago();
+    
+    // 6. Mostrar mensaje de procesamiento
+    mostrarMensajeCobro('⏳ Procesando venta...', 'info');
+    
+    // 7. Enviar a la API
     try {
-        const ventaData = {
-            total: total,
-            productos: window.carritoCobro,
-            pago_recibido: montoRecibido,
-            cambio: cambio,
-            metodo_pago: metodo,
-            referencia_pago: referencia || null
-        };
-        
-        console.log('📦 Datos de venta a enviar:', ventaData);
-        
         const response = await fetch('/api/ventas', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1520,45 +1518,150 @@ async function confirmarPago(total) {
         });
         
         const data = await response.json();
-        console.log('📨 Respuesta del servidor:', data);
+        console.log('📥 Respuesta del servidor:', data);
         
         if (response.ok) {
-            // Mensaje específico por método
-            let mensajeExito = '';
-            if (metodo === 'efectivo' && cambio > 0) {
-                mensajeExito = `✅ Venta registrada - ENTREGAR CAMBIO: $${cambio.toFixed(2)}`;
-                setTimeout(() => {
-                    alert(`💵 ENTREGAR AL CLIENTE:\nCambio: $${cambio.toFixed(2)}`);
-                }, 500);
-            } else if (metodo === 'efectivo') {
-                mensajeExito = '✅ Venta registrada - Pago exacto';
-            } else {
-                const nombresMetodos = {
-                    'tarjeta_credito': 'Tarjeta de Crédito',
-                    'tarjeta_debito': 'Tarjeta de Débito', 
-                    'tarjeta_digital': 'Tarjeta Digital',
-                    'transferencia': 'Transferencia',
-                    'cheque': 'Cheque'
-                };
-                mensajeExito = `✅ Venta registrada - ${nombresMetodos[metodo]}`;
-            }
-                
-            mostrarMensajeCobro(mensajeExito, 'success');
-            console.log('✅ Venta registrada exitosamente');
-            
-            // Limpiar carrito
+            // ✅ ÉXITO - Limpiar carrito y mostrar mensaje
             window.carritoCobro = [];
             actualizarCarritoCobro();
+            
+            // Mostrar mensaje de éxito con detalles
+            let mensajeExito = `✅ Venta registrada exitosamente`;
+            if (data.id) {
+                mensajeExito += ` (ID: #${data.id})`;
+            }
+            if (cambio > 0) {
+                mensajeExito += ` - Cambio: $${cambio.toFixed(2)}`;
+            }
+            
+            mostrarMensajeCobro(mensajeExito, 'success');
+            
+            // Opcional: Mostrar alerta con más detalles
+            setTimeout(() => {
+                alert(`🎉 Venta completada!\n\nTotal: $${total.toFixed(2)}\nMétodo: ${metodo}\n${cambio > 0 ? `Cambio: $${cambio.toFixed(2)}` : 'Pago exacto'}`);
+            }, 500);
+            
         } else {
-            mostrarMensajeCobro('Error: ' + data.error, 'error');
-            console.error('❌ Error del servidor:', data.error);
+            // ❌ ERROR DEL SERVIDOR
+            console.error('Error del servidor:', data);
+            mostrarMensajeCobro(`❌ Error: ${data.error || 'Error desconocido'}`, 'error');
+            
+            // Re-abrir el modal en caso de error
+            setTimeout(() => {
+                finalizarCuenta();
+            }, 1000);
         }
+        
     } catch (error) {
-        console.error('❌ Error finalizando cuenta:', error);
-        mostrarMensajeCobro('Error de conexión: ' + error.message, 'error');
+        // ❌ ERROR DE CONEXIÓN
+        console.error('❌ Error de conexión:', error);
+        mostrarMensajeCobro('❌ Error de conexión con el servidor', 'error');
     }
 }
-
+// ✅ CORREGIDO: También necesitas actualizar la función actualizarInterfazPorMetodo()
+/*
+function actualizarInterfazPorMetodo(metodo) {
+    console.log('🔄 Actualizando interfaz para método:', metodo);
+    
+    const seccionDinamica = document.getElementById('seccion-pago-dinamica');
+    const referenciaContainer = document.getElementById('referenciaContainer');
+    const btnConfirmar = document.getElementById('btnConfirmarPago');
+    
+    if (!seccionDinamica || !btnConfirmar) {
+        console.error('❌ Elementos del modal no encontrados');
+        return;
+    }
+    
+    // ✅ CORREGIDO: Obtener el total correctamente
+    const totalCarrito = parseFloat(document.querySelector('#total-carrito').textContent) || 0;
+    
+    // Configuraciones por método
+    const configMetodos = {
+        efectivo: {
+            html: `
+                <div class="seccion-efectivo">
+                    <div class="pago-input">
+                        <label>Monto recibido:</label>
+                        <input type="number" id="montoRecibido" step="0.01" min="0" value="${totalCarrito.toFixed(2)}" autofocus>
+                    </div>
+                    
+                    <div class="montos-rapidos">
+                        <small>Monto rápido:</small>
+                        <div class="botones-montos">
+                            ${generarBotonesMontosRapidos(totalCarrito)}
+                        </div>
+                    </div>
+                    
+                    <div class="pago-resumen" id="pagoResumen">
+                        <div class="cambio-item">
+                            <span>Cambio a entregar:</span>
+                            <strong id="cambioCalculado">$0.00</strong>
+                        </div>
+                        <div class="desglose-cambio" id="desgloseCambio"></div>
+                    </div>
+                </div>
+            `,
+            referencia: false,
+            btnTexto: '✅ Confirmar Venta'
+        },
+        tarjeta_credito: {
+            html: `
+                <div class="seccion-tarjeta">
+                    <p>💳 <strong>Tarjeta de Crédito</strong></p>
+                    <p>Total: <strong>$${totalCarrito.toFixed(2)}</strong></p>
+                    <small>Desliza o inserta la tarjeta en el terminal</small>
+                </div>
+            `,
+            referencia: true,
+            label: 'Número de autorización:',
+            help: 'Número de autorización de la transacción',
+            btnTexto: '✅ Confirmar Pago con Tarjeta'
+        },
+        // ... resto de métodos igual
+    };
+    
+    // ✅ CORREGIDO: Verificar si referenciaContainer existe
+    if (referenciaContainer) {
+        const config = configMetodos[metodo] || configMetodos.efectivo;
+        
+        // Actualizar sección dinámica
+        seccionDinamica.innerHTML = config.html;
+        
+        // Mostrar/ocultar referencia
+        if (config.referencia) {
+            referenciaContainer.style.display = 'block';
+            document.getElementById('labelReferencia').textContent = config.label;
+            document.getElementById('helpReferencia').textContent = config.help;
+            if (document.getElementById('referenciaPago')) {
+                document.getElementById('referenciaPago').placeholder = config.help;
+            }
+        } else {
+            referenciaContainer.style.display = 'none';
+        }
+        
+        // Actualizar botón de confirmación
+        btnConfirmar.innerHTML = config.btnTexto;
+    }
+    
+    // Configurar eventos si es efectivo
+    if (metodo === 'efectivo') {
+        setTimeout(() => {
+            const montoInput = document.getElementById('montoRecibido');
+            
+            if (montoInput) {
+                // ✅ CORREGIDO: Configurar eventos correctamente
+                montoInput.addEventListener('input', function() {
+                    calcularCambioMejorado(totalCarrito);
+                });
+                
+                // Calcular cambio inicial
+                calcularCambioMejorado(totalCarrito);
+                console.log('✅ Eventos de efectivo configurados');
+            }
+        }, 100);
+    }
+}
+*/
 // Calcular cambio en tiempo real
 function calcularCambio(total) {
     const montoRecibido = parseFloat(document.getElementById('montoRecibido').value) || 0;
@@ -1579,60 +1682,6 @@ function cerrarModalPago() {
     const modal = document.getElementById('modalPagoOverlay');
     if (modal) {
         modal.remove();
-    }
-}
-
-// Confirmar pago y procesar venta
-async function confirmarPago(total) {
-    const montoRecibido = parseFloat(document.getElementById('montoRecibido').value);
-    const cambio = montoRecibido - total;
-    
-    if (isNaN(montoRecibido) || montoRecibido <= 0) {
-        alert('Monto inválido');
-        return;
-    }
-    
-    if (montoRecibido < total) {
-        alert(`El pago ($${montoRecibido.toFixed(2)}) es menor al total ($${total.toFixed(2)})`);
-        return;
-    }
-    
-    // Cerrar modal
-    cerrarModalPago();
-    
-    // Proceder con el registro de la venta
-    try {
-        const response = await fetch('/api/ventas', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                total: total,
-                productos: window.carritoCobro,
-                pago_recibido: montoRecibido,
-                cambio: cambio
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            // Mostrar mensaje con el cambio
-            mostrarMensajeCobro(`✅ Venta registrada - Cambio: $${cambio.toFixed(2)}`, 'success');
-            
-            // Alertar sobre el cambio a entregar
-            setTimeout(() => {
-                alert(`💵 ENTREGAR AL CLIENTE:\nCambio: $${cambio.toFixed(2)}`);
-            }, 500);
-            
-            // Limpiar carrito
-            window.carritoCobro = [];
-            actualizarCarritoCobro();
-        } else {
-            mostrarMensajeCobro('Error: ' + data.error, 'error');
-        }
-    } catch (error) {
-        console.error('Error finalizando cuenta:', error);
-        mostrarMensajeCobro('Error de conexión: ' + error.message, 'error');
     }
 }
 
@@ -2702,46 +2751,48 @@ function mostrarListaVentas(ventas, fecha) {
     contenido.innerHTML = html;
 }
 
-// 🆕 FUNCIÓN PARA OBTENER INFORMACIÓN DEL MÉTODO DE PAGO
+// 🆕 FUNCIÓN MEJORADA PARA OBTENER INFORMACIÓN DEL MÉTODO DE PAGO
+// 🆕 FUNCIÓN CORREGIDA - MANEJA NULL EXPLÍCITAMENTE
 function obtenerInfoMetodoPago(metodo) {
-    const metodos = {
-        efectivo: {
+    // ✅ MEJOR DEPURACIÓN
+    console.log('🔍 Método de pago recibido:', metodo, 'Tipo:', typeof metodo);
+    
+    // Si es null/undefined o string vacío
+    if (!metodo || metodo === 'null' || metodo === 'undefined') {
+        console.warn('⚠️ Método de pago no definido, usando "efectivo"');
+        return {
             icono: '💵',
-            texto: 'Efectivo',
+            texto: 'Efectivo que no es efectivo',
             clase: 'metodo-efectivo'
-        },
-        tarjeta_credito: {
-            icono: '💳',
-            texto: 'Tarjeta Crédito',
-            clase: 'metodo-tarjeta'
-        },
-        tarjeta_debito: {
-            icono: '🏦',
-            texto: 'Tarjeta Débito',
-            clase: 'metodo-tarjeta'
-        },
-        tarjeta_digital: {
-            icono: '📱',
-            texto: 'Tarjeta Digital',
-            clase: 'metodo-digital'
-        },
-        transferencia: {
-            icono: '🔄',
-            texto: 'Transferencia',
-            clase: 'metodo-transferencia'
-        },
-        cheque: {
-            icono: '📄',
-            texto: 'Cheque',
-            clase: 'metodo-cheque'
-        }
+        };
+    }
+    
+    // Convertir a string y limpiar
+    const metodoNormalizado = String(metodo).toLowerCase().trim();
+    console.log('🔧 Método normalizado:', metodoNormalizado);
+    
+    const metodos = {
+        'efectivo': { icono: '💵', texto: 'Efectivo', clase: 'metodo-efectivo' },
+        'tarjeta_credito': { icono: '💳', texto: 'Tarjeta Crédito', clase: 'metodo-tarjeta' },
+        'tarjeta_debito': { icono: '🏦', texto: 'Tarjeta Débito', clase: 'metodo-tarjeta' },
+        'tarjeta_digital': { icono: '📱', texto: 'Tarjeta Digital', clase: 'metodo-digital' },
+        'transferencia': { icono: '🔄', texto: 'Transferencia', clase: 'metodo-transferencia' },
+        'cheque': { icono: '📄', texto: 'Cheque', clase: 'metodo-cheque' }
     };
     
-    return metodos[metodo] || {
-        icono: '❓',
-        texto: 'No especificado',
-        clase: 'metodo-desconocido'
-    };
+    const infoMetodo = metodos[metodoNormalizado];
+    
+    if (infoMetodo) {
+        return infoMetodo;
+    } else {
+        console.warn(`❌ Método no reconocido: "${metodoNormalizado}"`);
+        // Si no se reconoce, mostrar el valor original
+        return {
+            icono: '❓',
+            texto: metodoNormalizado || 'Desconocido',
+            clase: 'metodo-desconocido'
+        };
+    }
 }
 
 // Función para reimprimir ticket (placeholder)

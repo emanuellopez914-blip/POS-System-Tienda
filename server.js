@@ -567,10 +567,13 @@ app.delete('/api/productos/:id', requireAuth, requireAdmin, (req, res) => {
 
 // 🧾 RUTA PARA REGISTRAR VENTAS - VERSIÓN MEJORADA
 app.post('/api/ventas', requireAuth, async (req, res) => {
-    const { total, productos, pago_recibido, cambio } = req.body;
+
+    // ✅ CORREGIDO: Agregar metodo_pago y referencia_pago
+    const { total, productos, pago_recibido, cambio, metodo_pago, referencia_pago } = req.body;
     const usuario_id = req.session.user.id;
     
     console.log('📝 Registrando venta - Usuario:', usuario_id, 'Total:', total);
+    console.log('💳 Método de pago recibido:', metodo_pago); // ← Agregar este log
     
     // Validaciones profesionales
     if (!total || total <= 0) {
@@ -587,15 +590,21 @@ app.post('/api/ventas', requireAuth, async (req, res) => {
         const pago = pago_recibido || total;
         const cambioCalculado = cambio || 0;
         
+        // ✅ VALOR POR DEFECTO PARA MÉTODO DE PAGO
+        const metodoPagoGuardar = metodo_pago || 'efectivo';
+        const referenciaGuardar = referencia_pago || null;
+        
+        console.log('💾 Método a guardar:', metodoPagoGuardar);
+        
         // ✅ USAR FUNCIÓN PROFESIONAL PARA FECHA
         const fechaVenta = obtenerFechaHoraSQLite();
         
         console.log('🕐 Fecha de venta registrada:', fechaVenta);
         
-        // Registrar la venta
+        // ✅ CORREGIDO: Modificar la query SQL para incluir metodo_pago y referencia_pago
         db.run(
-            "INSERT INTO ventas (fecha, total, usuario_id, productos_vendidos, pago_recibido, cambio) VALUES (?, ?, ?, ?, ?, ?)",
-            [fechaVenta, total, usuario_id, productosJSON, pago, cambioCalculado],
+            "INSERT INTO ventas (fecha, total, usuario_id, productos_vendidos, pago_recibido, cambio, metodo_pago, referencia_pago) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [fechaVenta, total, usuario_id, productosJSON, pago, cambioCalculado, metodoPagoGuardar, referenciaGuardar],
             async function(err) {
                 if (err) {
                     console.error('❌ Error registrando venta:', err);
@@ -604,7 +613,7 @@ app.post('/api/ventas', requireAuth, async (req, res) => {
                 }
                 
                 const ventaId = this.lastID;
-                console.log('✅ Venta registrada - ID:', ventaId, 'Fecha:', fechaVenta);
+                console.log('✅ Venta registrada - ID:', ventaId, 'Método:', metodoPagoGuardar);
                 
                 // Actualizar stocks de productos (transacción segura)
                 await actualizarStocksProductos(productos);
@@ -613,7 +622,8 @@ app.post('/api/ventas', requireAuth, async (req, res) => {
                     id: ventaId, 
                     mensaje: 'Venta registrada correctamente',
                     cambio: cambioCalculado,
-                    fecha: fechaVenta
+                    fecha: fechaVenta,
+                    metodo_pago: metodoPagoGuardar // ← Incluir en respuesta
                 });
             }
         );
