@@ -92,6 +92,81 @@ db.serialize(() => {
     db.run(`INSERT OR IGNORE INTO usuarios (username, password, tipo) VALUES (?, ?, ?)`, 
         ['admin', passwordHash, 'administrador']);
 });
+// Verificar y agregar columnas si es necesario
+db.all("PRAGMA table_info(ventas)", (err, rows) => {
+    if (err) return;
+    
+    const columnasExistentes = rows.map(row => row.name);
+    
+    // Verificar si falta metodo_pago
+    if (!columnasExistentes.includes('metodo_pago')) {
+        db.run("ALTER TABLE ventas ADD COLUMN metodo_pago TEXT DEFAULT 'efectivo'", (err) => {
+            if (err) console.log('Error agregando metodo_pago:', err.message);
+            else console.log('✅ Columna metodo_pago agregada');
+        });
+    }
+    
+    // Verificar si falta referencia_pago
+    if (!columnasExistentes.includes('referencia_pago')) {
+        db.run("ALTER TABLE ventas ADD COLUMN referencia_pago TEXT", (err) => {
+            if (err) console.log('Error agregando referencia_pago:', err.message);
+            else console.log('✅ Columna referencia_pago agregada');
+        });
+    }
+    
+    // Verificar si falta pago_recibido y cambio
+    if (!columnasExistentes.includes('pago_recibido')) {
+        db.run("ALTER TABLE ventas ADD COLUMN pago_recibido REAL", (err) => {
+            if (err) console.log('Error agregando pago_recibido:', err.message);
+            else console.log('✅ Columna pago_recibido agregada');
+        });
+    }
+    
+    if (!columnasExistentes.includes('cambio')) {
+        db.run("ALTER TABLE ventas ADD COLUMN cambio REAL", (err) => {
+            if (err) console.log('Error agregando cambio:', err.message);
+            else console.log('✅ Columna cambio agregada');
+        });
+    }
+});
+
+// Verificar y agregar columnas si es necesario
+db.all("PRAGMA table_info(ventas)", (err, rows) => {
+    if (err) return;
+    
+    const columnasExistentes = rows.map(row => row.name);
+    
+    // Verificar si falta metodo_pago
+    if (!columnasExistentes.includes('metodo_pago')) {
+        db.run("ALTER TABLE ventas ADD COLUMN metodo_pago TEXT DEFAULT 'efectivo'", (err) => {
+            if (err) console.log('Error agregando metodo_pago:', err.message);
+            else console.log('✅ Columna metodo_pago agregada');
+        });
+    }
+    
+    // Verificar si falta referencia_pago
+    if (!columnasExistentes.includes('referencia_pago')) {
+        db.run("ALTER TABLE ventas ADD COLUMN referencia_pago TEXT", (err) => {
+            if (err) console.log('Error agregando referencia_pago:', err.message);
+            else console.log('✅ Columna referencia_pago agregada');
+        });
+    }
+    
+    // Verificar si falta pago_recibido y cambio
+    if (!columnasExistentes.includes('pago_recibido')) {
+        db.run("ALTER TABLE ventas ADD COLUMN pago_recibido REAL", (err) => {
+            if (err) console.log('Error agregando pago_recibido:', err.message);
+            else console.log('✅ Columna pago_recibido agregada');
+        });
+    }
+    
+    if (!columnasExistentes.includes('cambio')) {
+        db.run("ALTER TABLE ventas ADD COLUMN cambio REAL", (err) => {
+            if (err) console.log('Error agregando cambio:', err.message);
+            else console.log('✅ Columna cambio agregada');
+        });
+    }
+});
 
 // 🕐 FUNCIONES PROFESIONALES PARA MANEJO DE FECHAS
 
@@ -572,6 +647,10 @@ app.post('/api/ventas', requireAuth, async (req, res) => {
     const { total, productos, pago_recibido, cambio, metodo_pago, referencia_pago } = req.body;
     const usuario_id = req.session.user.id;
     
+    console.log('💳 Método de pago recibido:', metodo_pago);
+    console.log('💰 Pago recibido:', pago_recibido);
+    console.log('🔄 Cambio:', cambio);
+    console.log('📋 Referencia:', referencia_pago);
     console.log('📝 Registrando venta - Usuario:', usuario_id, 'Total:', total);
     console.log('💳 Método de pago recibido:', metodo_pago); // ← Agregar este log
     

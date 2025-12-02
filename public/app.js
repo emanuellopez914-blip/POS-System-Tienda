@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
+//----------------------------------------------------------------------------------------------------------------------------------------
 // Cargar aplicación principal
 function loadApp(user) {
     const app = document.getElementById('app');
@@ -111,6 +112,9 @@ function showSection(section) {
             mainContent.innerHTML = `<h2>Selecciona una opción del menú</h2>`;
     }
 }
+//************************************************************************************************************************* */
+//-----------------------------------------------CATEGORIAS----------------------------------------------------------------
+//************************************************************************************************************************* */
 
 // 📁 FUNCIONES PARA CATEGORÍAS
 async function loadCategorias() {
@@ -269,6 +273,10 @@ function mostrarMensaje(mensaje, tipo) {
         messageDiv.className = '';
     }, 3000);
 }
+
+//************************************************************************************************************************* */
+//-----------------------------------------------PRODUCTOS----------------------------------------------------------------
+//************************************************************************************************************************* */
 
 // 📦 FUNCIONES PARA PRODUCTOS
 async function loadProductos() {
@@ -593,6 +601,10 @@ function toggleControlInventario() {
         stockInput.value = '0';
     }
 }
+
+//************************************************************************************************************************* */
+//-----------------------------------------------COBRO---------------------------------------------------------------------
+//************************************************************************************************************************* */
 
 // 💵 FUNCIONES PARA COBRO - VERSIÓN CORREGIDA
 // 🔧 ACTUALIZA LA FUNCIÓN loadCobro - AGREGA LA INICIALIZACIÓN:
@@ -1486,6 +1498,7 @@ async function confirmarPago(total) {
     }
     
     // 4. Preparar datos de la venta
+    // 4. Preparar datos de la venta (CORREGIDO)
     const ventaData = {
         total: total,
         productos: window.carritoCobro.map(item => ({
@@ -1497,8 +1510,8 @@ async function confirmarPago(total) {
         })),
         pago_recibido: montoRecibido,
         cambio: cambio,
-        metodo_pago: metodo,  // ← IMPORTANTE: Usar el método real seleccionado
-        referencia_pago: referencia
+        metodo_pago: metodo,
+        referencia_pago: referencia || null  // Asegurar que sea null si está vacío
     };
     
     console.log('📤 Datos a enviar:', ventaData);
@@ -1558,110 +1571,7 @@ async function confirmarPago(total) {
         mostrarMensajeCobro('❌ Error de conexión con el servidor', 'error');
     }
 }
-// ✅ CORREGIDO: También necesitas actualizar la función actualizarInterfazPorMetodo()
-/*
-function actualizarInterfazPorMetodo(metodo) {
-    console.log('🔄 Actualizando interfaz para método:', metodo);
-    
-    const seccionDinamica = document.getElementById('seccion-pago-dinamica');
-    const referenciaContainer = document.getElementById('referenciaContainer');
-    const btnConfirmar = document.getElementById('btnConfirmarPago');
-    
-    if (!seccionDinamica || !btnConfirmar) {
-        console.error('❌ Elementos del modal no encontrados');
-        return;
-    }
-    
-    // ✅ CORREGIDO: Obtener el total correctamente
-    const totalCarrito = parseFloat(document.querySelector('#total-carrito').textContent) || 0;
-    
-    // Configuraciones por método
-    const configMetodos = {
-        efectivo: {
-            html: `
-                <div class="seccion-efectivo">
-                    <div class="pago-input">
-                        <label>Monto recibido:</label>
-                        <input type="number" id="montoRecibido" step="0.01" min="0" value="${totalCarrito.toFixed(2)}" autofocus>
-                    </div>
-                    
-                    <div class="montos-rapidos">
-                        <small>Monto rápido:</small>
-                        <div class="botones-montos">
-                            ${generarBotonesMontosRapidos(totalCarrito)}
-                        </div>
-                    </div>
-                    
-                    <div class="pago-resumen" id="pagoResumen">
-                        <div class="cambio-item">
-                            <span>Cambio a entregar:</span>
-                            <strong id="cambioCalculado">$0.00</strong>
-                        </div>
-                        <div class="desglose-cambio" id="desgloseCambio"></div>
-                    </div>
-                </div>
-            `,
-            referencia: false,
-            btnTexto: '✅ Confirmar Venta'
-        },
-        tarjeta_credito: {
-            html: `
-                <div class="seccion-tarjeta">
-                    <p>💳 <strong>Tarjeta de Crédito</strong></p>
-                    <p>Total: <strong>$${totalCarrito.toFixed(2)}</strong></p>
-                    <small>Desliza o inserta la tarjeta en el terminal</small>
-                </div>
-            `,
-            referencia: true,
-            label: 'Número de autorización:',
-            help: 'Número de autorización de la transacción',
-            btnTexto: '✅ Confirmar Pago con Tarjeta'
-        },
-        // ... resto de métodos igual
-    };
-    
-    // ✅ CORREGIDO: Verificar si referenciaContainer existe
-    if (referenciaContainer) {
-        const config = configMetodos[metodo] || configMetodos.efectivo;
-        
-        // Actualizar sección dinámica
-        seccionDinamica.innerHTML = config.html;
-        
-        // Mostrar/ocultar referencia
-        if (config.referencia) {
-            referenciaContainer.style.display = 'block';
-            document.getElementById('labelReferencia').textContent = config.label;
-            document.getElementById('helpReferencia').textContent = config.help;
-            if (document.getElementById('referenciaPago')) {
-                document.getElementById('referenciaPago').placeholder = config.help;
-            }
-        } else {
-            referenciaContainer.style.display = 'none';
-        }
-        
-        // Actualizar botón de confirmación
-        btnConfirmar.innerHTML = config.btnTexto;
-    }
-    
-    // Configurar eventos si es efectivo
-    if (metodo === 'efectivo') {
-        setTimeout(() => {
-            const montoInput = document.getElementById('montoRecibido');
-            
-            if (montoInput) {
-                // ✅ CORREGIDO: Configurar eventos correctamente
-                montoInput.addEventListener('input', function() {
-                    calcularCambioMejorado(totalCarrito);
-                });
-                
-                // Calcular cambio inicial
-                calcularCambioMejorado(totalCarrito);
-                console.log('✅ Eventos de efectivo configurados');
-            }
-        }, 100);
-    }
-}
-*/
+
 // Calcular cambio en tiempo real
 function calcularCambio(total) {
     const montoRecibido = parseFloat(document.getElementById('montoRecibido').value) || 0;
@@ -2134,6 +2044,10 @@ function ocultarResultadosBusqueda() {
     }
 }
 
+//************************************************************************************************************************* */
+//-----------------------------------------------USUARIOS----------------------------------------------------------------
+//************************************************************************************************************************* */
+
 // 👥 FUNCIONES PARA USUARIOS
 async function loadUsuarios() {
     const mainContent = document.getElementById('main-content');
@@ -2380,6 +2294,10 @@ function testVenta() {
         console.log('❌ Error API ventas:', error);
     });
 }
+
+//************************************************************************************************************************* */
+//-----------------------------------------------REPORTES----------------------------------------------------------------
+//************************************************************************************************************************* */
 
 // 🧾 FUNCIONES COMPLETAS PARA VENTAS Y REPORTES
 async function loadVentas() {
