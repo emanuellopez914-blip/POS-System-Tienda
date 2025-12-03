@@ -1257,7 +1257,280 @@ app.get('/api/actualizar-metodos-pago', requireAuth, (req, res) => {
     });
 });
 
+// 🖨️ RUTA PARA REIMPRIMIR TICKET DE VENTA PASADA
+app.get('/api/ventas/:id/reimprimir', requireAuth, async (req, res) => {
+    try {
+        const ventaId = req.params.id;
+        
+        console.log(`🖨️ Solicitando reimpresión de venta #${ventaId}`);
+        
+        // Buscar la venta en la base de datos
+        db.get("SELECT * FROM ventas WHERE id = ?", [ventaId], async (err, venta) => {
+            if (err) {
+                console.error('Error buscando venta:', err);
+                return res.status(500).json({ error: 'Error al buscar la venta' });
+            }
+            
+            if (!venta) {
+                return res.status(404).json({ error: 'Venta no encontrada' });
+            }
+            
+            // Parsear productos vendidos
+            let productos = [];
+            try {
+                productos = JSON.parse(venta.productos_vendidos);
+            } catch (e) {
+                console.error('Error parseando productos:', e);
+            }
+            
+            // Preparar datos para el ticket
+            const ticketData = {
+                id: venta.id,
+                fecha: venta.fecha,
+                total: venta.total,
+                productos: productos,
+                metodo_pago: venta.metodo_pago || 'efectivo',
+                pago_recibido: venta.pago_recibido,
+                cambio: venta.cambio,
+                referencia: venta.referencia_pago,
+                usuario: req.session.user.username
+            };
+            
+            // Generar contenido del ticket
+            const contenidoTicket = generarContenidoTicket(ticketData);
+            
+            // Enviar a imprimir
+            const resultado = await imprimirTicketDirecto(contenidoTicket);
+            
+            if (resultado.success) {
+                res.json({ 
+                    success: true, 
+                    message: `Ticket #${ventaId} reimpreso correctamente`,
+                    venta: ticketData
+                });
+            } else {
+                // Fallback: enviar contenido para imprimir desde el navegador
+                res.json({ 
+                    success: true, 
+                    message: 'Contenido listo para reimpresión',
+                    ticketContent: contenidoTicket,
+                    venta: ticketData,
+                    fallback: true
+                });
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error en reimpresión:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 
+// 📊 RUTA PARA IMPRIMIR CORTE Z
+app.get('/api/ventas/corte/imprimir', requireAuth, async (req, res) => {
+    try {
+        const { fecha, usuario_id } = req.query;
+        const fechaCorte = fecha || new Date().toISOString().split('T')[0];
+        
+        console.log(`📊 Generando e imprimiendo corte Z para: ${fechaCorte}`);
+        
+        // Obtener ventas del día
+        const query = `
+            SELECT v.*, u.username as usuario_nombre 
+            FROM ventas v 
+            LEFT JOIN usuarios u ON v.usuario_id = u.id 
+            WHERE DATE(v.fecha) = ?
+            ORDER BY v.fecha
+        `;
+        
+        db.all(query, [fechaCorte], async (err, ventas) => {
+            if (err) {
+                console.error('Error obteniendo ventas:', err);
+                return res.status(500).json({ error: err.message });
+            }
+            
+            // Generar contenido del corte Z
+            const contenidoCorte = generarContenidoCorteZ(ventas, fechaCorte, req.session.user);
+            
+            // Imprimir corte Z
+            const resultado = await imprimirTicketDirecto(contenidoCorte);
+            
+            if (resultado.success) {
+                res.json({ 
+                    success: true, 
+                    message: `Corte Z impreso para ${fechaCorte}`,
+                    totalVentas: ventas.length,
+                    totalMonto: ventas.reduce((sum, v) => sum + v.total, 0),
+                    fecha: fechaCorte
+                });
+            } else {
+                // Fallback
+                res.json({ 
+                    success: true, 
+                    message: 'Corte Z listo para imprimir',
+                    corteContent: contenidoCorte,
+                    fecha: fechaCorte,
+                    fallback: true
+                });
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error imprimiendo corte Z:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// 🖨️ FUNCIÓN PARA GENERAR CONTENIDO DE TICKET
+function generarContenidoTicket(ventaData) {
+    let contenido = '\x1B\x40'; // Inicializar
+    contenido += '\x1B\x61\x01'; // Centrado
+    contenido += '\x1B\x28\x45\x02\x00\x12'; // Densidad
+    
+    // Encabezado
+    contenido += 'TIENDA POS\n';
+    contenido += '================\n';
+    contenido += `Ticket: #${ventaData.id}\n`;
+    contenido += `Fecha: ${new Date(ventaData.fecha).toLocaleString('es-MX')}\n`;
+    contenido += `Cajero: ${ventaData.usuario}\n`;
+    contenido += '----------------\n';
+    
+    // Productos
+    contenido += 'PRODUCTO           CANT  TOTAL\n';
+    contenido += '------------------------------\n';
+    
+    ventaData.productos.forEach(p => {
+        const nombre = p.nombre.length > 18 ? p.nombre.substring(0, 18) + '.' : p.nombre.padEnd(18);
+        const cantidad = p.cantidad.toString().padStart(3);
+        const total = (p.precio * p.cantidad).toFixed(2).padStart(8);
+        contenido += `${nombre} ${cantidad} $${total}\n`;
+    });
+    
+    contenido += '----------------\n';
+    contenido += `SUBTOTAL: $${ventaData.total.toFixed(2)}\n`;
+    contenido += `MÉTODO: ${ventaData.metodo_pago.toUpperCase()}\n`;
+    
+    if (ventaData.pago_recibido) {
+        contenido += `RECIBIDO: $${parseFloat(ventaData.pago_recibido).toFixed(2)}\n`;
+        contenido += `CAMBIO: $${parseFloat(ventaData.cambio || 0).toFixed(2)}\n`;
+    }
+    
+    contenido += '================\n';
+    contenido += `TOTAL: $${ventaData.total.toFixed(2)}\n`;
+    contenido += '================\n';
+    contenido += '*** REIMPRESIÓN ***\n';
+    contenido += `${new Date().toLocaleString('es-MX')}\n`;
+    contenido += '\x1D\x56\x42\x00'; // Cortar
+    
+    return contenido;
+}
+
+// 📊 FUNCIÓN PARA GENERAR CONTENIDO DE CORTE Z
+function generarContenidoCorteZ(ventas, fecha, usuario) {
+    const totalVentas = ventas.length;
+    const totalMonto = ventas.reduce((sum, v) => sum + v.total, 0);
+    
+    let contenido = '\x1B\x40'; // Inicializar
+    contenido += '\x1B\x61\x01'; // Centrado
+    contenido += '\x1B\x28\x45\x02\x00\x14'; // Mayor densidad para corte
+    
+    contenido += '================\n';
+    contenido += '  CORTE Z  \n';
+    contenido += '================\n';
+    contenido += `Fecha: ${fecha}\n`;
+    contenido += `Hora: ${new Date().toLocaleTimeString('es-MX')}\n`;
+    contenido += `Usuario: ${usuario.username}\n`;
+    contenido += '================\n\n';
+    
+    contenido += 'RESUMEN DEL DÍA\n';
+    contenido += '----------------\n';
+    contenido += `Total ventas: ${totalVentas}\n`;
+    contenido += `Monto total: $${totalMonto.toFixed(2)}\n\n`;
+    
+    if (ventas.length > 0) {
+        contenido += 'DETALLE DE VENTAS\n';
+        contenido += '----------------\n';
+        
+        // Agrupar por método de pago
+        const porMetodo = {};
+        ventas.forEach(v => {
+            const metodo = v.metodo_pago || 'efectivo';
+            if (!porMetodo[metodo]) {
+                porMetodo[metodo] = { cantidad: 0, monto: 0 };
+            }
+            porMetodo[metodo].cantidad++;
+            porMetodo[metodo].monto += v.total;
+        });
+        
+        // Imprimir por método
+        Object.entries(porMetodo).forEach(([metodo, datos]) => {
+            contenido += `${metodo.toUpperCase()}: ${datos.cantidad} ventas\n`;
+            contenido += `  Total: $${datos.monto.toFixed(2)}\n`;
+        });
+        
+        contenido += '\n';
+        
+        // Últimas 5 ventas
+        contenido += 'ÚLTIMAS VENTAS\n';
+        contenido += '----------------\n';
+        const ultimasVentas = ventas.slice(-5);
+        ultimasVentas.forEach(v => {
+            contenido += `#${v.id} - $${v.total.toFixed(2)} - ${v.metodo_pago}\n`;
+        });
+    } else {
+        contenido += 'No hubo ventas hoy\n';
+    }
+    
+    contenido += '\n================\n';
+    contenido += 'FIRMA DEL CAJERO\n';
+    contenido += '________________\n\n';
+    contenido += '================\n';
+    contenido += '  FIN DE CORTE  \n';
+    contenido += '================\n';
+    contenido += '\x1D\x56\x41\x00'; // Cortar completo
+    
+    return contenido;
+}
+
+// 🖨️ FUNCIÓN PARA IMPRIMIR DIRECTAMENTE
+async function imprimirTicketDirecto(contenido) {
+    try {
+        const escpos = require('escpos');
+        escpos.USB = require('escpos-usb');
+        
+        const devices = escpos.USB.findPrinter();
+        if (devices.length === 0) {
+            return { success: false, error: 'Impresora no encontrada' };
+        }
+        
+        const device = devices[0];
+        const printer = new escpos.Printer(device);
+        
+        return new Promise((resolve) => {
+            device.open((error) => {
+                if (error) {
+                    console.error('Error abriendo impresora:', error);
+                    resolve({ success: false, error: error.message });
+                    return;
+                }
+                
+                // Imprimir contenido
+                printer.raw(Buffer.from(contenido, 'binary'));
+                printer.close((err) => {
+                    if (err) {
+                        resolve({ success: false, error: err.message });
+                    } else {
+                        resolve({ success: true });
+                    }
+                });
+            });
+        });
+        
+    } catch (error) {
+        console.error('Error en impresión directa:', error);
+        return { success: false, error: error.message };
+    }
+}
 
 // Iniciar servidor
 app.listen(PORT, () => {
