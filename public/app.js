@@ -2683,7 +2683,7 @@ function mostrarListaVentas(ventas, fecha) {
                         </div>
                     </div>
                     <div class="venta-actions">
-                        <button class="btn-reimprimir" onclick="reimprimirTicket(${venta.id})">🖨️ Reimprimir Ticket</button>
+                       <!-- <button class="btn-reimprimir" onclick="reimprimirTicket(${venta.id})">🖨️ Reimprimir Ticket</button> -->
                     </div>
                 </div>
             `;
@@ -2738,9 +2738,126 @@ function obtenerInfoMetodoPago(metodo) {
     }
 }
 
-// Función para reimprimir ticket (placeholder)
-function reimprimirTicket(ventaId) {
-    mostrarMensajeVentas(`Función de reimpresión para venta #${ventaId} en desarrollo`, 'info');
+// 🖨️ FUNCIÓN PARA REIMPRIMIR TICKET
+async function reimprimirTicket(ventaId) {
+    if (!confirm(`¿Reimprimir ticket #${ventaId}?`)) {
+        return;
+    }
+    
+    mostrarMensajeCobro('⏳ Preparando reimpresión...', 'info');
+    
+    try {
+        const response = await fetch(`/api/ventas/${ventaId}/reimprimir`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            if (data.fallback) {
+                // Imprimir desde navegador
+                imprimirDesdeNavegador(data.ticketContent, `Reimpresión Ticket #${ventaId}`);
+                mostrarMensajeCobro(`✅ Ticket #${ventaId} listo para imprimir`, 'success');
+            } else {
+                mostrarMensajeCobro(`✅ Ticket #${ventaId} reimpreso`, 'success');
+            }
+        } else {
+            mostrarMensajeCobro(`❌ Error: ${data.error}`, 'error');
+        }
+        
+    } catch (error) {
+        console.error('Error reimprimiendo:', error);
+        mostrarMensajeCobro('❌ Error de conexión', 'error');
+    }
+}
+
+// 📊 FUNCIÓN PARA IMPRIMIR CORTE Z
+async function imprimirCorteZ(fecha = null) {
+    const fechaCorte = fecha || prompt('Ingrese la fecha para el corte Z (YYYY-MM-DD):', 
+        new Date().toISOString().split('T')[0]);
+    
+    if (!fechaCorte) return;
+    
+    if (!confirm(`¿Imprimir corte Z para ${fechaCorte}?`)) {
+        return;
+    }
+    
+    mostrarMensajeCobro('⏳ Generando corte Z...', 'info');
+    
+    try {
+        const response = await fetch(`/api/ventas/corte/imprimir?fecha=${fechaCorte}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            if (data.fallback) {
+                // Imprimir desde navegador
+                imprimirDesdeNavegador(data.corteContent, `Corte Z ${fechaCorte}`);
+                mostrarMensajeCobro(`✅ Corte Z para ${fechaCorte} listo para imprimir`, 'success');
+            } else {
+                mostrarMensajeCobro(`✅ Corte Z impreso para ${fechaCorte}`, 'success');
+            }
+            
+            // Mostrar resumen
+            setTimeout(() => {
+                alert(`📊 Corte Z ${fechaCorte}\n\n` +
+                      `Total ventas: ${data.totalVentas}\n` +
+                      `Monto total: $${data.totalMonto?.toFixed(2) || '0.00'}`);
+            }, 500);
+            
+        } else {
+            mostrarMensajeCobro(`❌ Error: ${data.error}`, 'error');
+        }
+        
+    } catch (error) {
+        console.error('Error imprimiendo corte Z:', error);
+        mostrarMensajeCobro('❌ Error de conexión', 'error');
+    }
+}
+
+// 🖨️ FUNCIÓN AUXILIAR PARA IMPRIMIR DESDE NAVEGADOR
+function imprimirDesdeNavegador(contenido, titulo = 'Ticket') {
+    const ventana = window.open('', '_blank');
+    ventana.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>${titulo}</title>
+            <style>
+                @media print {
+                    @page { size: 80mm; margin: 0; }
+                    body { 
+                        font-family: 'Tahoma', sans-serif;
+                        font-size: 14px;
+                        white-space: pre;
+                        margin: 0;
+                        padding: 5mm;
+                        line-height: 1;
+                    }
+                }
+                body {
+                    font-family: 'Tahoma', sans-serif;
+                    font-size: 12px;
+                    white-space: pre;
+                    line-height: 1;
+                    padding: 20px;
+                }
+            </style>
+        </head>
+        <body onload="window.print(); setTimeout(() => window.close(), 1000);">
+            ${contenido.replace(/\n/g, '<br>')}
+        </body>
+        </html>
+    `);
+    ventana.document.close();
 }
 
 // 📈 REPORTES AVANZADOS
@@ -3079,9 +3196,7 @@ function mostrarReporteTendencias(data, dias) {
 }
 
 // 🖨️ IMPRIMIR CORTE Z (placeholder)
-function imprimirCorteZ() {
-    mostrarMensajeVentas('Función de impresión en desarrollo', 'info');
-}
+
 
 // 💬 MOSTRAR MENSAJES
 function mostrarMensajeVentas(mensaje, tipo) {
@@ -3387,7 +3502,7 @@ function generarTicket(ventaData) {
     const configTicket = JSON.parse(localStorage.getItem('ticketConfig')) || {
         tienda: {
             nombre: "Cafeteria ¡Bonito Dia!",
-            direccion: "Ignacio Allende #5",
+            direccion: "Calle I. Allende 5, Zona Centro, CP. 38600 Acámbaro, Gto.",
             telefono: "Tel: 417-172-17-65",
             rfc: "RFC: kakl",
             mensaje: "¡GRACIAS POR SU COMPRA!"
@@ -3441,15 +3556,15 @@ function generarTicket(ventaData) {
                     body {
                         margin: 0;
                         padding: 0;
-                        font-family: 'Courier New', monospace;
+                        font-family: 'Tahoma', sans-serif;
                         font-size: 12px;
                         width: ${anchoTicket}mm;
                     }
                 }
                 
                 body {
-                    font-family: 'Courier New', monospace;
-                    font-size: 12px;
+                    font-family: 'Tahoma', sans-serif;
+                    font-size: 13px;
                     line-height: 1.3;
                     width: ${anchoTicket}mm;
                     margin: 0 auto;
@@ -3479,6 +3594,7 @@ function generarTicket(ventaData) {
                 
                 .info-tienda {
                     font-size: 10px;
+                    font-weight: normal;
                     line-height: 1.2;
                 }
                 
@@ -3631,11 +3747,10 @@ function generarTicket(ventaData) {
             <div class="ticket">
                 <!-- ENCABEZADO DE LA TIENDA -->
                 <div class="encabezado">
-                    <div class="nombre-tienda">${configTicket.tienda.nombre}</div>
+                    <div class="nombre-tienda">Cafeteria ¡Bonito Dia!</div>
                     <div class="info-tienda">
-                        ${configTicket.tienda.direccion}<br>
-                        ${configTicket.tienda.telefono}<br>
-                        ${configTicket.tienda.rfc}
+                        <h1 class = "info-tienda">Calle I. Allende 5, Zona Centro, CP. 38600 Acámbaro, Gto.</h1>
+                        <h1 class = "info-tienda">Tel: 417-172-17-65</h1>
                     </div>
                 </div>
                 

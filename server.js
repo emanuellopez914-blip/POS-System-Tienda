@@ -956,6 +956,7 @@ app.get('/api/ventas/corte', requireAuth, (req, res) => {
 });
 
 // Función para procesar el corte Z
+// 📊 FUNCIÓN MEJORADA procesarCorteZ() CON CATEGORÍAS
 function procesarCorteZ(ventas, fecha, usuario, res) {
     if (ventas.length === 0) {
         return res.json({
@@ -966,7 +967,8 @@ function procesarCorteZ(ventas, fecha, usuario, res) {
                     total_ventas_cantidad: 0,
                     promedio_venta: 0
                 },
-                categorias: []
+                categorias: [],
+                porCategoria: []  // ← NUEVO
             },
             productos_mas_vendidos: [],
             usuario_actual: usuario
@@ -978,75 +980,195 @@ function procesarCorteZ(ventas, fecha, usuario, res) {
     const totalVentasCantidad = ventas.length;
     const promedioVenta = totalVentas / totalVentasCantidad;
     
-    // Procesar productos por categoría
-    const categoriasMap = new Map();
-    const productosMap = new Map();
-    
+    // Primero, obtenemos todos los IDs de productos de todas las ventas
+    const todosProductosIds = new Set();
     ventas.forEach(venta => {
         try {
             const productos = JSON.parse(venta.productos_vendidos);
-            
             productos.forEach(prod => {
-                // Agrupar por categoría (por ahora general)
-                const categoriaNombre = 'General';
-                
-                if (!categoriasMap.has(categoriaNombre)) {
-                    categoriasMap.set(categoriaNombre, {
-                        categoria_nombre: categoriaNombre,
-                        total_ventas: 0,
-                        monto_total: 0
-                    });
-                }
-                
-                const cat = categoriasMap.get(categoriaNombre);
-                cat.total_ventas += 1;
-                cat.monto_total += prod.precio * prod.cantidad;
-                
-                // Agrupar productos más vendidos
-                if (!productosMap.has(prod.nombre)) {
-                    productosMap.set(prod.nombre, {
-                        nombre: prod.nombre,
-                        total_vendido: 0,
-                        monto_total: 0
-                    });
-                }
-                
-                const producto = productosMap.get(prod.nombre);
-                producto.total_vendido += prod.cantidad;
-                producto.monto_total += prod.precio * prod.cantidad;
+                todosProductosIds.add(prod.id);
             });
-            
         } catch (error) {
-            console.error('Error procesando productos de venta:', error);
+            console.error('Error parseando productos:', error);
         }
     });
     
-    // Convertir mapas a arrays y calcular porcentajes
-    const categoriasArray = Array.from(categoriasMap.values());
-    categoriasArray.forEach(cat => {
-        cat.porcentaje = totalVentas > 0 ? ((cat.monto_total / totalVentas) * 100).toFixed(1) : '0.0';
+    // Consulta para obtener categorías de esos productos
+    const queryProductos = `
+        SELECT p.id, p.nombre, p.categoria_id, c.nombre as categoria_nombre
+        FROM productos p
+        LEFT JOIN categorias c ON p.categoria_id = c.id
+        WHERE p.id IN (${Array.from(todosProductosIds).join(',')})
+    `;
+    
+    // Aquí necesitamos hacer una consulta asíncrona
+    db.all(queryProductos, [], (err, productosConCategoria) => {
+        if (err) {
+            console.error('Error obteniendo categorías:', err);
+            // Continuamos sin categorías
+            enviarRespuestaSinCategorias();
+            return;
+        }
+        
+        // Crear mapa de producto -> categoría
+        const productoACategoriaMap = new Map();
+        productosConCategoria.forEach(p => {
+            productoACategoriaMap.set(p.id, {
+                categoria_id: p.categoria_id,
+                categoria_nombre: p.categoria_nombre || 'Sin categoría'
+            });
+        });
+        
+        // Procesar ventas con categorías
+        procesarConCategorias(productoACategoriaMap);
     });
     
-    // Ordenar productos más vendidos
-    const productosArray = Array.from(productosMap.values())
-        .sort((a, b) => b.total_vendido - a.total_vendido)
-        .slice(0, 10);
-    
-    res.json({
-        fecha: fecha,
-        totales: {
-            general: {
-                total_ventas: totalVentas,
-                total_ventas_cantidad: totalVentasCantidad,
-                promedio_venta: promedioVenta
+    function procesarConCategorias(productoACategoriaMap) {
+        const categoriasMap = new Map();
+        const productosMap = new Map();
+        
+        ventas.forEach(venta => {
+            try {
+                const productos = JSON.parse(venta.productos_vendidos);
+                
+                productos.forEach(prod => {
+                    // Obtener categoría del producto
+                    const categoriaInfo = productoACategoriaMap.get(prod.id);
+                    const categoriaNombre = categoriaInfo ? 
+                        categoriaInfo.categoria_nombre : 'Sin categoría';
+                    
+                    // Agrupar por categoría
+                    if (!categoriasMap.has(categoriaNombre)) {
+                        categoriasMap.set(categoriaNombre, {
+                            categoria_nombre: categoriaNombre,
+                            total_ventas: 0,
+                            monto_total: 0,
+                            cantidad_productos: 0
+                        });
+                    }
+                    
+                    const cat = categoriasMap.get(categoriaNombre);
+                    cat.total_ventas += 1;
+                    cat.monto_total += prod.precio * prod.cantidad;
+                    cat.cantidad_productos += prod.cantidad;
+                    
+                    // Agrupar productos más vendidos
+                    if (!productosMap.has(prod.nombre)) {
+                        productosMap.set(prod.nombre, {
+                            nombre: prod.nombre,
+                            total_vendido: 0,
+                            monto_total: 0
+                        });
+                    }
+                    
+                    const producto = productosMap.get(prod.nombre);
+                    producto.total_vendido += prod.cantidad;
+                    producto.monto_total += prod.precio * prod.cantidad;
+                });
+                
+            } catch (error) {
+                console.error('Error procesando productos de venta:', error);
+            }
+        });
+        
+        // Convertir mapas a arrays y calcular porcentajes
+        const categoriasArray = Array.from(categoriasMap.values());
+        categoriasArray.forEach(cat => {
+            cat.porcentaje = totalVentas > 0 ? ((cat.monto_total / totalVentas) * 100).toFixed(1) : '0.0';
+        });
+        
+        // Ordenar categorías por monto (de mayor a menor)
+        categoriasArray.sort((a, b) => b.monto_total - a.monto_total);
+        
+        // Ordenar productos más vendidos
+        const productosArray = Array.from(productosMap.values())
+            .sort((a, b) => b.total_vendido - a.total_vendido)
+            .slice(0, 10);
+        
+        // Enviar respuesta
+        res.json({
+            fecha: fecha,
+            totales: {
+                general: {
+                    total_ventas: totalVentas,
+                    total_ventas_cantidad: totalVentasCantidad,
+                    promedio_venta: promedioVenta
+                },
+                categorias: categoriasArray,
+                porCategoria: categoriasArray  // Para compatibilidad
             },
-            categorias: categoriasArray
-        },
-        productos_mas_vendidos: productosArray,
-        usuario_actual: usuario
-    });
+            productos_mas_vendidos: productosArray,
+            usuario_actual: usuario
+        });
+    }
+    
+    function enviarRespuestaSinCategorias() {
+        // Versión simple sin categorías (fallback)
+        const categoriasMap = new Map();
+        const productosMap = new Map();
+        
+        ventas.forEach(venta => {
+            try {
+                const productos = JSON.parse(venta.productos_vendidos);
+                
+                productos.forEach(prod => {
+                    // Categoría general si no hay datos
+                    const categoriaNombre = 'General';
+                    
+                    if (!categoriasMap.has(categoriaNombre)) {
+                        categoriasMap.set(categoriaNombre, {
+                            categoria_nombre: categoriaNombre,
+                            total_ventas: 0,
+                            monto_total: 0,
+                            cantidad_productos: 0
+                        });
+                    }
+                    
+                    const cat = categoriasMap.get(categoriaNombre);
+                    cat.total_ventas += 1;
+                    cat.monto_total += prod.precio * prod.cantidad;
+                    cat.cantidad_productos += prod.cantidad;
+                    
+                    // Productos
+                    if (!productosMap.has(prod.nombre)) {
+                        productosMap.set(prod.nombre, {
+                            nombre: prod.nombre,
+                            total_vendido: 0,
+                            monto_total: 0
+                        });
+                    }
+                    
+                    const producto = productosMap.get(prod.nombre);
+                    producto.total_vendido += prod.cantidad;
+                    producto.monto_total += prod.precio * prod.cantidad;
+                });
+                
+            } catch (error) {
+                console.error('Error procesando productos:', error);
+            }
+        });
+        
+        const categoriasArray = Array.from(categoriasMap.values());
+        const productosArray = Array.from(productosMap.values())
+            .sort((a, b) => b.total_vendido - a.total_vendido)
+            .slice(0, 10);
+        
+        res.json({
+            fecha: fecha,
+            totales: {
+                general: {
+                    total_ventas: totalVentas,
+                    total_ventas_cantidad: totalVentasCantidad,
+                    promedio_venta: promedioVenta
+                },
+                categorias: categoriasArray,
+                porCategoria: categoriasArray
+            },
+            productos_mas_vendidos: productosArray,
+            usuario_actual: usuario
+        });
+    }
 }
-
 // 👤 REPORTE POR CAJERO
 app.get('/api/ventas/reporte/cajeros', requireAuth, (req, res) => {
     const { fecha_inicio, fecha_fin } = req.query;
@@ -1326,16 +1448,17 @@ app.get('/api/ventas/:id/reimprimir', requireAuth, async (req, res) => {
     }
 });
 
-// 📊 RUTA PARA IMPRIMIR CORTE Z
+// 📊 RUTA COMPLETA PARA IMPRIMIR CORTE Z (server.js)
 app.get('/api/ventas/corte/imprimir', requireAuth, async (req, res) => {
     try {
-        const { fecha, usuario_id } = req.query;
+        const { fecha } = req.query;
         const fechaCorte = fecha || new Date().toISOString().split('T')[0];
+        const usuario = req.session.user;
         
-        console.log(`📊 Generando e imprimiendo corte Z para: ${fechaCorte}`);
+        console.log(`📊 Imprimiendo corte Z para: ${fechaCorte} - Usuario: ${usuario.username}`);
         
-        // Obtener ventas del día
-        const query = `
+        // 1. Obtener ventas del día
+        const queryVentas = `
             SELECT v.*, u.username as usuario_nombre 
             FROM ventas v 
             LEFT JOIN usuarios u ON v.usuario_id = u.id 
@@ -1343,156 +1466,193 @@ app.get('/api/ventas/corte/imprimir', requireAuth, async (req, res) => {
             ORDER BY v.fecha
         `;
         
-        db.all(query, [fechaCorte], async (err, ventas) => {
+        db.all(queryVentas, [fechaCorte], (err, ventas) => {
             if (err) {
                 console.error('Error obteniendo ventas:', err);
                 return res.status(500).json({ error: err.message });
             }
             
-            // Generar contenido del corte Z
-            const contenidoCorte = generarContenidoCorteZ(ventas, fechaCorte, req.session.user);
+            // 2. Calcular estadísticas
+            const totalVentas = ventas.length;
+            const totalMonto = ventas.reduce((sum, v) => sum + v.total, 0);
+            const promedioVenta = totalVentas > 0 ? totalMonto / totalVentas : 0;
             
-            // Imprimir corte Z
-            const resultado = await imprimirTicketDirecto(contenidoCorte);
+            // 3. Calcular por método de pago
+            const porMetodo = {};
+            ventas.forEach(v => {
+                const metodo = v.metodo_pago || 'efectivo';
+                if (!porMetodo[metodo]) {
+                    porMetodo[metodo] = { cantidad: 0, monto: 0 };
+                }
+                porMetodo[metodo].cantidad++;
+                porMetodo[metodo].monto += v.total;
+            });
             
-            if (resultado.success) {
-                res.json({ 
-                    success: true, 
-                    message: `Corte Z impreso para ${fechaCorte}`,
-                    totalVentas: ventas.length,
-                    totalMonto: ventas.reduce((sum, v) => sum + v.total, 0),
-                    fecha: fechaCorte
+            // 4. Calcular productos más vendidos
+            const productosMap = new Map();
+            ventas.forEach(venta => {
+                try {
+                    const productos = JSON.parse(venta.productos_vendidos);
+                    productos.forEach(prod => {
+                        const key = prod.nombre;
+                        if (!productosMap.has(key)) {
+                            productosMap.set(key, {
+                                nombre: prod.nombre,
+                                total_vendido: 0,
+                                monto_total: 0
+                            });
+                        }
+                        const producto = productosMap.get(key);
+                        producto.total_vendido += prod.cantidad;
+                        producto.monto_total += prod.precio * prod.cantidad;
+                    });
+                } catch (error) {
+                    console.error('Error procesando productos:', error);
+                }
+            });
+            
+            const productosMasVendidos = Array.from(productosMap.values())
+                .sort((a, b) => b.total_vendido - a.total_vendido)
+                .slice(0, 10);
+            
+            // 5. Generar contenido para impresión
+            const contenidoCorte = generarContenidoCorteZImpresion({
+                fecha: fechaCorte,
+                ventas: ventas,
+                totalVentas: totalVentas,
+                totalMonto: totalMonto,
+                promedioVenta: promedioVenta,
+                porMetodo: porMetodo,
+                productosMasVendidos: productosMasVendidos,
+                usuario: usuario
+            });
+            
+            // 6. Intentar imprimir directamente
+            imprimirTicketDirecto(contenidoCorte)
+                .then(resultado => {
+                    if (resultado.success) {
+                        res.json({ 
+                            success: true, 
+                            message: `Corte Z impreso para ${fechaCorte}`,
+                            totalVentas: totalVentas,
+                            totalMonto: totalMonto,
+                            promedioVenta: promedioVenta,
+                            fecha: fechaCorte
+                        });
+                    } else {
+                        // Fallback: enviar contenido para impresión desde navegador
+                        res.json({ 
+                            success: true, 
+                            message: 'Corte Z listo para imprimir',
+                            corteContent: contenidoCorte,
+                            totalVentas: totalVentas,
+                            totalMonto: totalMonto,
+                            promedioVenta: promedioVenta,
+                            fecha: fechaCorte,
+                            fallback: true
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error en impresión:', error);
+                    res.json({ 
+                        success: true, 
+                        message: 'Corte Z listo para imprimir',
+                        corteContent: contenidoCorte,
+                        fallback: true,
+                        fecha: fechaCorte
+                    });
                 });
-            } else {
-                // Fallback
-                res.json({ 
-                    success: true, 
-                    message: 'Corte Z listo para imprimir',
-                    corteContent: contenidoCorte,
-                    fecha: fechaCorte,
-                    fallback: true
-                });
-            }
         });
         
     } catch (error) {
-        console.error('Error imprimiendo corte Z:', error);
+        console.error('Error general en corte Z:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// 🖨️ FUNCIÓN PARA GENERAR CONTENIDO DE TICKET
-function generarContenidoTicket(ventaData) {
+// 📊 FUNCIÓN PARA GENERAR CONTENIDO DE CORTE Z PARA IMPRESIÓN
+function generarContenidoCorteZImpresion(data) {
+    const { fecha, ventas, totalVentas, totalMonto, promedioVenta, porMetodo, productosMasVendidos, usuario } = data;
+    
     let contenido = '\x1B\x40'; // Inicializar
     contenido += '\x1B\x61\x01'; // Centrado
-    contenido += '\x1B\x28\x45\x02\x00\x12'; // Densidad
+    contenido += '\x1B\x28\x45\x02\x00\x14'; // Mayor densidad para documentos importantes
     
-    // Encabezado
-    contenido += 'TIENDA POS\n';
-    contenido += '================\n';
-    contenido += `Ticket: #${ventaData.id}\n`;
-    contenido += `Fecha: ${new Date(ventaData.fecha).toLocaleString('es-MX')}\n`;
-    contenido += `Cajero: ${ventaData.usuario}\n`;
-    contenido += '----------------\n';
+    // ENCABEZADO DEL CORTE Z
+    contenido += '='.repeat(42) + '\n';
+    contenido += '     CORTE Z DEL DIA     \n';
+    contenido += '='.repeat(42) + '\n\n';
     
-    // Productos
-    contenido += 'PRODUCTO           CANT  TOTAL\n';
-    contenido += '------------------------------\n';
+    contenido += `FECHA: ${fecha}\n`;
+    contenido += `HORA: ${new Date().toLocaleTimeString('es-MX')}\n`;
+    contenido += `USUARIO: ${usuario.username}\n`;
+    contenido += '-'.repeat(42) + '\n\n';
     
-    ventaData.productos.forEach(p => {
-        const nombre = p.nombre.length > 18 ? p.nombre.substring(0, 18) + '.' : p.nombre.padEnd(18);
-        const cantidad = p.cantidad.toString().padStart(3);
-        const total = (p.precio * p.cantidad).toFixed(2).padStart(8);
-        contenido += `${nombre} ${cantidad} $${total}\n`;
+    // RESUMEN GENERAL
+    contenido += 'RESUMEN DEL DIA\n';
+    contenido += '*'.repeat(42) + '\n';
+    contenido += `TOTAL VENTAS: ${totalVentas}\n`;
+    contenido += `MONTO TOTAL: $${totalMonto.toFixed(2)}\n`;
+    contenido += `PROMEDIO/VENTA: $${promedioVenta.toFixed(2)}\n\n`;
+    
+    // VENTAS POR MÉTODO DE PAGO
+    contenido += 'VENTAS POR METODO DE PAGO\n';
+    contenido += '-'.repeat(42) + '\n';
+    
+    Object.entries(porMetodo).forEach(([metodo, datos]) => {
+        const porcentaje = totalMonto > 0 ? ((datos.monto / totalMonto) * 100).toFixed(1) : '0.0';
+        contenido += `${metodo.toUpperCase()}:\n`;
+        contenido += `  Ventas: ${datos.cantidad}\n`;
+        contenido += `  Monto: $${datos.monto.toFixed(2)}\n`;
+        contenido += `  % Total: ${porcentaje}%\n\n`;
     });
     
-    contenido += '----------------\n';
-    contenido += `SUBTOTAL: $${ventaData.total.toFixed(2)}\n`;
-    contenido += `MÉTODO: ${ventaData.metodo_pago.toUpperCase()}\n`;
-    
-    if (ventaData.pago_recibido) {
-        contenido += `RECIBIDO: $${parseFloat(ventaData.pago_recibido).toFixed(2)}\n`;
-        contenido += `CAMBIO: $${parseFloat(ventaData.cambio || 0).toFixed(2)}\n`;
+    // PRODUCTOS MÁS VENDIDOS (solo top 5)
+    if (productosMasVendidos.length > 0) {
+        contenido += 'PRODUCTOS MAS VENDIDOS\n';
+        contenido += '-'.repeat(42) + '\n';
+        
+        productosMasVendidos.slice(0, 5).forEach((prod, index) => {
+            contenido += `${index + 1}. ${prod.nombre}\n`;
+            contenido += `   Unidades: ${prod.total_vendido}\n`;
+            contenido += `   Monto: $${prod.monto_total.toFixed(2)}\n\n`;
+        });
     }
     
-    contenido += '================\n';
-    contenido += `TOTAL: $${ventaData.total.toFixed(2)}\n`;
-    contenido += '================\n';
-    contenido += '*** REIMPRESIÓN ***\n';
-    contenido += `${new Date().toLocaleString('es-MX')}\n`;
-    contenido += '\x1D\x56\x42\x00'; // Cortar
-    
-    return contenido;
-}
-
-// 📊 FUNCIÓN PARA GENERAR CONTENIDO DE CORTE Z
-function generarContenidoCorteZ(ventas, fecha, usuario) {
-    const totalVentas = ventas.length;
-    const totalMonto = ventas.reduce((sum, v) => sum + v.total, 0);
-    
-    let contenido = '\x1B\x40'; // Inicializar
-    contenido += '\x1B\x61\x01'; // Centrado
-    contenido += '\x1B\x28\x45\x02\x00\x14'; // Mayor densidad para corte
-    
-    contenido += '================\n';
-    contenido += '  CORTE Z  \n';
-    contenido += '================\n';
-    contenido += `Fecha: ${fecha}\n`;
-    contenido += `Hora: ${new Date().toLocaleTimeString('es-MX')}\n`;
-    contenido += `Usuario: ${usuario.username}\n`;
-    contenido += '================\n\n';
-    
-    contenido += 'RESUMEN DEL DÍA\n';
-    contenido += '----------------\n';
-    contenido += `Total ventas: ${totalVentas}\n`;
-    contenido += `Monto total: $${totalMonto.toFixed(2)}\n\n`;
-    
+    // DETALLE DE VENTAS (últimas 10)
     if (ventas.length > 0) {
-        contenido += 'DETALLE DE VENTAS\n';
-        contenido += '----------------\n';
+        contenido += 'ULTIMAS 10 VENTAS\n';
+        contenido += '-'.repeat(42) + '\n';
         
-        // Agrupar por método de pago
-        const porMetodo = {};
-        ventas.forEach(v => {
-            const metodo = v.metodo_pago || 'efectivo';
-            if (!porMetodo[metodo]) {
-                porMetodo[metodo] = { cantidad: 0, monto: 0 };
-            }
-            porMetodo[metodo].cantidad++;
-            porMetodo[metodo].monto += v.total;
-        });
-        
-        // Imprimir por método
-        Object.entries(porMetodo).forEach(([metodo, datos]) => {
-            contenido += `${metodo.toUpperCase()}: ${datos.cantidad} ventas\n`;
-            contenido += `  Total: $${datos.monto.toFixed(2)}\n`;
+        const ultimasVentas = ventas.slice(-10);
+        ultimasVentas.forEach(v => {
+            const hora = new Date(v.fecha).toLocaleTimeString('es-MX', {hour:'2-digit', minute:'2-digit'});
+            contenido += `#${v.id} ${hora} $${v.total.toFixed(2)} ${v.metodo_pago}\n`;
         });
         
         contenido += '\n';
-        
-        // Últimas 5 ventas
-        contenido += 'ÚLTIMAS VENTAS\n';
-        contenido += '----------------\n';
-        const ultimasVentas = ventas.slice(-5);
-        ultimasVentas.forEach(v => {
-            contenido += `#${v.id} - $${v.total.toFixed(2)} - ${v.metodo_pago}\n`;
-        });
-    } else {
-        contenido += 'No hubo ventas hoy\n';
     }
     
-    contenido += '\n================\n';
+    // FIRMA Y CIERRE
+    contenido += '='.repeat(42) + '\n';
     contenido += 'FIRMA DEL CAJERO\n';
-    contenido += '________________\n\n';
-    contenido += '================\n';
-    contenido += '  FIN DE CORTE  \n';
-    contenido += '================\n';
+    contenido += '\n\n\n'; // Espacio para firma
+    contenido += '__________________________\n\n';
+    
+    contenido += 'FECHA Y HORA DE CIERRE:\n';
+    contenido += `${new Date().toLocaleString('es-MX')}\n\n`;
+    
+    contenido += '='.repeat(42) + '\n';
+    contenido += '   FIN DEL CORTE Z   \n';
+    contenido += '='.repeat(42) + '\n';
+    
     contenido += '\x1D\x56\x41\x00'; // Cortar completo
     
     return contenido;
 }
 
-// 🖨️ FUNCIÓN PARA IMPRIMIR DIRECTAMENTE
+// 🖨️ FUNCIÓN PARA IMPRIMIR DIRECTAMENTE (debe estar definida)
 async function imprimirTicketDirecto(contenido) {
     try {
         const escpos = require('escpos');
@@ -1530,6 +1690,388 @@ async function imprimirTicketDirecto(contenido) {
         console.error('Error en impresión directa:', error);
         return { success: false, error: error.message };
     }
+}
+
+// 📊 RUTA PARA OBTENER DATOS DEL CORTE Z (para pantalla)
+app.get('/api/ventas/corte', requireAuth, (req, res) => {
+    const { fecha } = req.query;
+    const fechaCorte = fecha || new Date().toISOString().split('T')[0];
+    
+    console.log('📊 Generando corte Z para fecha:', fechaCorte);
+    
+    // Consulta para obtener ventas del día
+    const queryVentas = `
+        SELECT v.*, u.username as usuario_nombre 
+        FROM ventas v 
+        LEFT JOIN usuarios u ON v.usuario_id = u.id 
+        WHERE DATE(v.fecha) = ?
+        ORDER BY v.fecha
+    `;
+    
+    db.all(queryVentas, [fechaCorte], (err, ventas) => {
+        if (err) {
+            console.error('❌ Error en corte Z:', err);
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        
+        if (ventas.length === 0) {
+            return res.json({
+                fecha: fechaCorte,
+                totales: {
+                    general: {
+                        total_ventas: 0,
+                        total_ventas_cantidad: 0,
+                        promedio_venta: 0
+                    },
+                    categorias: []
+                },
+                productos_mas_vendidos: [],
+                usuario_actual: req.session.user
+            });
+        }
+        
+        // Calcular totales generales
+        const totalVentas = ventas.reduce((sum, v) => sum + v.total, 0);
+        const totalVentasCantidad = ventas.length;
+        const promedioVenta = totalVentas / totalVentasCantidad;
+        
+        // Procesar productos por categoría (simplificado)
+        const categoriasMap = new Map();
+        
+        ventas.forEach(venta => {
+            try {
+                const productos = JSON.parse(venta.productos_vendidos);
+                productos.forEach(prod => {
+                    // Por ahora usamos "General", podrías agregar categorías después
+                    const categoriaNombre = 'General';
+                    
+                    if (!categoriasMap.has(categoriaNombre)) {
+                        categoriasMap.set(categoriaNombre, {
+                            categoria_nombre: categoriaNombre,
+                            total_ventas: 0,
+                            monto_total: 0
+                        });
+                    }
+                    
+                    const cat = categoriasMap.get(categoriaNombre);
+                    cat.total_ventas += 1;
+                    cat.monto_total += prod.precio * prod.cantidad;
+                });
+            } catch (error) {
+                console.error('Error procesando productos:', error);
+            }
+        });
+        
+        // Convertir mapas a arrays
+        const categoriasArray = Array.from(categoriasMap.values());
+        categoriasArray.forEach(cat => {
+            cat.porcentaje = totalVentas > 0 ? ((cat.monto_total / totalVentas) * 100).toFixed(1) : '0.0';
+        });
+        
+        // Calcular productos más vendidos
+        const productosMap = new Map();
+        ventas.forEach(venta => {
+            try {
+                const productos = JSON.parse(venta.productos_vendidos);
+                productos.forEach(prod => {
+                    const key = prod.nombre;
+                    if (!productosMap.has(key)) {
+                        productosMap.set(key, {
+                            nombre: prod.nombre,
+                            total_vendido: 0,
+                            monto_total: 0
+                        });
+                    }
+                    const producto = productosMap.get(key);
+                    producto.total_vendido += prod.cantidad;
+                    producto.monto_total += prod.precio * prod.cantidad;
+                });
+            } catch (error) {
+                console.error('Error procesando productos:', error);
+            }
+        });
+        
+        const productosArray = Array.from(productosMap.values())
+            .sort((a, b) => b.total_vendido - a.total_vendido)
+            .slice(0, 10);
+        
+        res.json({
+            fecha: fechaCorte,
+            totales: {
+                general: {
+                    total_ventas: totalVentas,
+                    total_ventas_cantidad: totalVentasCantidad,
+                    promedio_venta: promedioVenta
+                },
+                categorias: categoriasArray
+            },
+            productos_mas_vendidos: productosArray,
+            usuario_actual: req.session.user
+        });
+    });
+});
+
+// 🖨️ RUTA NUEVA SOLO PARA IMPRIMIR CORTE Z
+app.get('/api/ventas/corte/imprimir', requireAuth, async (req, res) => {
+    try {
+        const { fecha } = req.query;
+        const fechaCorte = fecha || new Date().toISOString().split('T')[0];
+        const usuario = req.session.user;
+        
+        console.log(`🖨️ Imprimiendo corte Z para: ${fechaCorte}`);
+        
+        // 1. Obtener ventas
+        const ventas = await new Promise((resolve) => {
+            db.all("SELECT * FROM ventas WHERE DATE(fecha) = ?", [fechaCorte], (err, rows) => {
+                resolve(err ? [] : rows);
+            });
+        });
+        
+        // 2. Si no hay ventas
+        if (ventas.length === 0) {
+            const contenido = generarCorteZVacio(fechaCorte, usuario);
+            return manejarImpresion(contenido, res, { 
+                fecha: fechaCorte, 
+                totalVentas: 0, 
+                totalMonto: 0 
+            });
+        }
+        
+        // 3. Obtener productos y categorías
+        const productosDB = await new Promise((resolve) => {
+            db.all("SELECT id, nombre, categoria_id FROM productos", [], (err, rows) => {
+                resolve(err ? [] : rows);
+            });
+        });
+        
+        const categoriasDB = await new Promise((resolve) => {
+            db.all("SELECT id, nombre FROM categorias", [], (err, rows) => {
+                resolve(err ? [] : rows);
+            });
+        });
+        
+        // 4. Procesar datos
+        const resultado = procesarParaImpresion(ventas, productosDB, categoriasDB, fechaCorte, usuario);
+        
+        // 5. Generar contenido e imprimir
+        const contenido = generarContenidoCorteZImpresion(resultado);
+        manejarImpresion(contenido, res, {
+            fecha: fechaCorte,
+            totalVentas: resultado.totalVentas,
+            totalMonto: resultado.totalMonto,
+            promedioVenta: resultado.promedioVenta,
+            categorias: resultado.porCategoria.length
+        });
+        
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// 🧮 FUNCIÓN AUXILIAR PARA PROCESAR DATOS
+function procesarParaImpresion(ventas, productosDB, categoriasDB, fecha, usuario) {
+    // Mapeos
+    const productoMap = new Map(productosDB.map(p => [p.id, p]));
+    const categoriaMap = new Map(categoriasDB.map(c => [c.id, c.nombre]));
+    
+    // Variables
+    let totalVentas = 0;
+    let totalMonto = 0;
+    const porMetodo = {};
+    const porCategoria = {};
+    const productosMap = new Map();
+    
+    ventas.forEach(venta => {
+        totalVentas++;
+        totalMonto += venta.total;
+        
+        // Método de pago
+        const metodo = venta.metodo_pago || 'efectivo';
+        if (!porMetodo[metodo]) porMetodo[metodo] = { cantidad: 0, monto: 0 };
+        porMetodo[metodo].cantidad++;
+        porMetodo[metodo].monto += venta.total;
+        
+        // Productos y categorías
+        try {
+            const productos = JSON.parse(venta.productos_vendidos);
+            productos.forEach(prod => {
+                // Productos
+                if (!productosMap.has(prod.nombre)) {
+                    productosMap.set(prod.nombre, {
+                        nombre: prod.nombre,
+                        total_vendido: 0,
+                        monto_total: 0
+                    });
+                }
+                const p = productosMap.get(prod.nombre);
+                p.total_vendido += prod.cantidad;
+                p.monto_total += prod.precio * prod.cantidad;
+                
+                // Categorías
+                const infoProd = productoMap.get(prod.id);
+                let catNombre = 'Sin categoría';
+                if (infoProd && infoProd.categoria_id) {
+                    catNombre = categoriaMap.get(infoProd.categoria_id) || `Cat ${infoProd.categoria_id}`;
+                }
+                
+                if (!porCategoria[catNombre]) {
+                    porCategoria[catNombre] = { cantidad: 0, monto: 0 };
+                }
+                porCategoria[catNombre].cantidad += prod.cantidad;
+                porCategoria[catNombre].monto += prod.precio * prod.cantidad;
+            });
+        } catch (error) {
+            console.error('Error procesando:', error);
+        }
+    });
+    
+    // Ordenar
+    const categoriasOrdenadas = Object.entries(porCategoria)
+        .sort(([, a], [, b]) => b.monto - a.monto);
+    
+    const productosMasVendidos = Array.from(productosMap.values())
+        .sort((a, b) => b.total_vendido - a.total_vendido)
+        .slice(0, 5);
+    
+    return {
+        fecha,
+        totalVentas: ventas.length,
+        totalMonto,
+        promedioVenta: ventas.length > 0 ? totalMonto / ventas.length : 0,
+        porMetodo,
+        porCategoria: categoriasOrdenadas,
+        productosMasVendidos,
+        usuario
+    };
+}
+
+// 🖨️ FUNCIÓN PARA GENERAR CONTENIDO
+function generarContenidoCorteZImpresion(data) {
+    const { fecha, totalVentas, totalMonto, promedioVenta, porMetodo, porCategoria, productosMasVendidos, usuario } = data;
+    
+    let contenido = '\x1B\x40\x1B\x61\x01\x1B\x28\x45\x02\x00\x14';
+    
+    contenido += '='.repeat(42) + '\n';
+    contenido += '     CORTE Z DEL DIA     \n';
+    contenido += '='.repeat(42) + '\n\n';
+    
+    contenido += `FECHA: ${fecha}\n`;
+    contenido += `HORA: ${new Date().toLocaleTimeString('es-MX')}\n`;
+    contenido += `USUARIO: ${usuario.username}\n`;
+    contenido += '-'.repeat(42) + '\n\n';
+    
+    contenido += 'RESUMEN DEL DIA\n';
+    contenido += '*'.repeat(42) + '\n';
+    contenido += `VENTAS: ${totalVentas}\n`;
+    contenido += `TOTAL: $${totalMonto.toFixed(2)}\n`;
+    contenido += `PROMEDIO: $${promedioVenta.toFixed(2)}\n\n`;
+    
+    contenido += 'METODOS DE PAGO\n';
+    contenido += '-'.repeat(42) + '\n';
+    Object.entries(porMetodo).forEach(([metodo, datos]) => {
+        const porcentaje = totalMonto > 0 ? ((datos.monto / totalMonto) * 100).toFixed(1) : '0.0';
+        const metodoNombre = metodo === 'efectivo' ? 'EFECTIVO' : 
+                            metodo === 'tarjeta_credito' ? 'TARJ. CRÉD.' :
+                            metodo === 'tarjeta_debito' ? 'TARJ. DÉB.' :
+                            metodo === 'tarjeta_digital' ? 'DIGITAL' :
+                            metodo === 'transferencia' ? 'TRANSF.' :
+                            metodo === 'cheque' ? 'CHEQUE' : metodo.toUpperCase();
+        
+        contenido += `${metodoNombre}: ${datos.cantidad} ventas\n`;
+        contenido += `  $${datos.monto.toFixed(2)} (${porcentaje}%)\n`;
+    });
+    
+    contenido += '\nTOTAL POR CATEGORIA\n';
+    contenido += '-'.repeat(42) + '\n';
+    porCategoria.forEach(([catNombre, datos]) => {
+        const porcentaje = totalMonto > 0 ? ((datos.monto / totalMonto) * 100).toFixed(1) : '0.0';
+        const nombre = catNombre.length > 18 ? catNombre.substring(0, 18) : catNombre.padEnd(18);
+        contenido += `${nombre} $${datos.monto.toFixed(2)}\n`;
+        contenido += `  ${datos.cantidad}u (${porcentaje}%)\n`;
+    });
+    
+    if (productosMasVendidos.length > 0) {
+        contenido += '\nPRODUCTOS MAS VENDIDOS\n';
+        contenido += '-'.repeat(42) + '\n';
+        productosMasVendidos.forEach((prod, index) => {
+            const nombre = prod.nombre.length > 20 ? prod.nombre.substring(0, 20) + '..' : prod.nombre.padEnd(20);
+            contenido += `${index + 1}. ${nombre}\n`;
+            contenido += `   ${prod.total_vendido}u $${prod.monto_total.toFixed(2)}\n`;
+        });
+    }
+    
+    contenido += '\n' + '='.repeat(42) + '\n';
+    contenido += 'TOTAL GENERAL: $' + totalMonto.toFixed(2).padStart(24) + '\n';
+    contenido += '='.repeat(42) + '\n';
+    contenido += 'FIRMA: ________________\n';
+    contenido += `${usuario.username}\n`;
+    contenido += new Date().toLocaleString('es-MX') + '\n';
+    contenido += '\x1D\x56\x41\x00';
+    
+    return contenido;
+}
+
+// 🖨️ FUNCIÓN PARA MANEJAR IMPRESIÓN
+async function manejarImpresion(contenido, res, datos) {
+    try {
+        const resultado = await imprimirTicketDirecto(contenido);
+        
+        if (resultado.success) {
+            res.json({ 
+                success: true, 
+                message: `Corte Z impreso para ${datos.fecha}`,
+                ...datos
+            });
+        } else {
+            res.json({ 
+                success: true, 
+                message: 'Corte Z listo para imprimir',
+                corteContent: contenido,
+                ...datos,
+                fallback: true
+            });
+        }
+    } catch (error) {
+        console.error('Error imprimiendo:', error);
+        res.json({ 
+            success: true, 
+            message: 'Corte Z listo para imprimir',
+            corteContent: contenido,
+            ...datos,
+            fallback: true
+        });
+    }
+}
+
+// 📄 FUNCIÓN PARA CORTE Z VACÍO
+function generarCorteZVacio(fecha, usuario) {
+    let contenido = '\x1B\x40\x1B\x61\x01';
+    
+    contenido += '='.repeat(42) + '\n';
+    contenido += '     CORTE Z DEL DIA     \n';
+    contenido += '='.repeat(42) + '\n\n';
+    
+    contenido += `FECHA: ${fecha}\n`;
+    contenido += `HORA: ${new Date().toLocaleTimeString('es-MX')}\n`;
+    contenido += `USUARIO: ${usuario.username}\n`;
+    contenido += '-'.repeat(42) + '\n\n';
+    
+    contenido += 'RESUMEN DEL DIA\n';
+    contenido += '*'.repeat(42) + '\n';
+    contenido += 'VENTAS TOTALES: 0\n';
+    contenido += 'MONTO TOTAL: $0.00\n';
+    contenido += 'PROMEDIO: $0.00\n\n';
+    
+    contenido += 'NO HUBO VENTAS ESTE DIA\n\n';
+    
+    contenido += 'FIRMA: ________________\n';
+    contenido += `${usuario.username}\n`;
+    contenido += new Date().toLocaleString('es-MX') + '\n';
+    contenido += '\x1D\x56\x41\x00';
+    
+    return contenido;
 }
 
 // Iniciar servidor
