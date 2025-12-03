@@ -34,9 +34,9 @@ function loadApp(user) {
                 </header>
                 
                 <nav class="admin-menu">
+                    <button onclick="showSection('usuarios')">👥 Usuarios</button>
                     <button onclick="showSection('categorias')">📁 Categorías</button>
                     <button onclick="showSection('productos')">📦 Productos</button>
-                    <button onclick="showSection('usuarios')">👥 Usuarios</button>
                     <button onclick="showSection('ventas')">🧾 Ventas</button>
                     <button onclick="showSection('cobro')">💵 Cobro</button>
                 </nav>
@@ -1453,7 +1453,6 @@ function generarDesgloseCambio(cambio) {
 
 // 📋 REEMPLAZA LA FUNCIÓN confirmarPago() COMPLETAMENTE CON ESTA VERSIÓN CORREGIDA:
 
-// 📋 REEMPLAZA LA FUNCIÓN confirmarPago() COMPLETAMENTE CON ESTA VERSIÓN SIMPLIFICADA:
 async function confirmarPago(total) {
     console.log('🎯 confirmarPago() INICIADA - Total:', total);
     
@@ -1498,7 +1497,6 @@ async function confirmarPago(total) {
     }
     
     // 4. Preparar datos de la venta
-    // 4. Preparar datos de la venta (CORREGIDO)
     const ventaData = {
         total: total,
         productos: window.carritoCobro.map(item => ({
@@ -1511,7 +1509,7 @@ async function confirmarPago(total) {
         pago_recibido: montoRecibido,
         cambio: cambio,
         metodo_pago: metodo,
-        referencia_pago: referencia || null  // Asegurar que sea null si está vacío
+        referencia_pago: referencia
     };
     
     console.log('📤 Datos a enviar:', ventaData);
@@ -1538,7 +1536,7 @@ async function confirmarPago(total) {
             window.carritoCobro = [];
             actualizarCarritoCobro();
             
-            // Mostrar mensaje de éxito con detalles
+            // Mostrar mensaje de éxito
             let mensajeExito = `✅ Venta registrada exitosamente`;
             if (data.id) {
                 mensajeExito += ` (ID: #${data.id})`;
@@ -1549,10 +1547,37 @@ async function confirmarPago(total) {
             
             mostrarMensajeCobro(mensajeExito, 'success');
             
+            // 🎫 GENERAR Y MOSTRAR TICKET AUTOMÁTICAMENTE (AGREGADO AQUÍ)
+            setTimeout(() => {
+                // Preparar datos para el ticket
+                const ticketData = {
+                    id: data.id,
+                    fecha: data.fecha || new Date().toISOString(),
+                    total: total,
+                    productos: ventaData.productos,
+                    metodo_pago: metodo,
+                    pago_recibido: montoRecibido,
+                    cambio: cambio,
+                    referencia: referencia,
+                    usuario: window.currentUser?.username || 'Sistema'
+                };
+                
+                console.log('🎫 Generando ticket con datos:', ticketData);
+                
+                // Llamar a la función generarTicket
+                if (typeof generarTicket === 'function') {
+                    generarTicket(ticketData);
+                } else {
+                    console.error('❌ Error: función generarTicket no encontrada');
+                    // Fallback: mostrar mensaje simple
+                    alert(`✅ Venta #${data.id} completada\nTotal: $${total.toFixed(2)}\n\nPara ver el ticket, asegúrate de que la función generarTicket esté definida.`);
+                }
+            }, 500);
+            
             // Opcional: Mostrar alerta con más detalles
             setTimeout(() => {
-                alert(`🎉 Venta completada!\n\nTotal: $${total.toFixed(2)}\nMétodo: ${metodo}\n${cambio > 0 ? `Cambio: $${cambio.toFixed(2)}` : 'Pago exacto'}`);
-            }, 500);
+                alert(`🎉 Venta completada!\n\n• ID: #${data.id}\n• Total: $${total.toFixed(2)}\n• Método: ${metodo}\n${cambio > 0 ? `• Cambio: $${cambio.toFixed(2)}` : '• Pago exacto'}\n\nSe abrirá el ticket en una nueva ventana...`);
+            }, 300);
             
         } else {
             // ❌ ERROR DEL SERVIDOR
@@ -3349,3 +3374,510 @@ function mostrarProductosEnLista(productos) {
         lista.appendChild(productoDiv);
     });
 }
+
+
+//************************************************************************************************************************* */
+//-----------------------------------------------TICKETS----------------------------------------------------------------
+//************************************************************************************************************************* */
+// 🎫 FUNCIÓN COMPLETA PARA GENERAR TICKET (OPCIÓN A - NUEVA VENTANA)
+function generarTicket(ventaData) {
+    console.log('🎫 Generando ticket para venta #', ventaData.id);
+    
+    // Información de la tienda (puedes personalizar después)
+    const configTicket = JSON.parse(localStorage.getItem('ticketConfig')) || {
+        tienda: {
+            nombre: "Cafeteria ¡Bonito Dia!",
+            direccion: "Ignacio Allende #5",
+            telefono: "Tel: 417-172-17-65",
+            rfc: "RFC: kakl",
+            mensaje: "¡GRACIAS POR SU COMPRA!"
+        }
+    };
+    
+    // Obtener fecha y hora formateada
+    const ahora = new Date();
+    const fecha = ahora.toLocaleDateString('es-MX', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    });
+    const hora = ahora.toLocaleTimeString('es-MX', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+    
+    // Formatear método de pago
+    const metodosPago = {
+        efectivo: "EFECTIVO",
+        tarjeta_credito: "TARJETA CRÉDITO",
+        tarjeta_debito: "TARJETA DÉBITO",
+        tarjeta_digital: "TARJETA DIGITAL",
+        transferencia: "TRANSFERENCIA",
+        cheque: "CHEQUE"
+    };
+    
+    const metodoPago = metodosPago[ventaData.metodo_pago] || ventaData.metodo_pago || "EFECTIVO";
+    
+    // Calcular ancho de columnas para el ticket
+    const anchoTicket = 80; // 80mm (tamaño estándar)
+    
+    // Crear contenido HTML del ticket
+    const ticketHTML = `
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Ticket Venta #${ventaData.id}</title>
+            <style>
+                /* ESTILOS PARA IMPRESIÓN DE TICKET */
+                @media print {
+                    @page {
+                        size: ${anchoTicket}mm;
+                        margin: 0;
+                    }
+                    
+                    body {
+                        margin: 0;
+                        padding: 0;
+                        font-family: 'Courier New', monospace;
+                        font-size: 12px;
+                        width: ${anchoTicket}mm;
+                    }
+                }
+                
+                body {
+                    font-family: 'Courier New', monospace;
+                    font-size: 12px;
+                    line-height: 1.3;
+                    width: ${anchoTicket}mm;
+                    margin: 0 auto;
+                    padding: 5mm;
+                    background: white;
+                    color: black;
+                }
+                
+                .ticket {
+                    width: 100%;
+                }
+                
+                /* ENCABEZADO */
+                .encabezado {
+                    text-align: center;
+                    border-bottom: 1px dashed #000;
+                    padding-bottom: 8px;
+                    margin-bottom: 8px;
+                }
+                
+                .nombre-tienda {
+                    font-weight: bold;
+                    font-size: 14px;
+                    text-transform: uppercase;
+                    margin: 5px 0;
+                }
+                
+                .info-tienda {
+                    font-size: 10px;
+                    line-height: 1.2;
+                }
+                
+                /* INFORMACIÓN DEL TICKET */
+                .info-ticket {
+                    text-align: center;
+                    font-size: 10px;
+                    margin-bottom: 12px;
+                    border-bottom: 1px dashed #ccc;
+                    padding-bottom: 8px;
+                }
+                
+                .numero-ticket {
+                    font-weight: bold;
+                    font-size: 11px;
+                    margin: 5px 0;
+                }
+                
+                /* TABLA DE PRODUCTOS */
+                .tabla-productos {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 10px 0;
+                }
+                
+                .tabla-productos th {
+                    text-align: left;
+                    border-bottom: 1px solid #000;
+                    padding: 4px 2px;
+                    font-size: 10px;
+                }
+                
+                .tabla-productos td {
+                    padding: 3px 2px;
+                    border-bottom: 1px dotted #ccc;
+                    vertical-align: top;
+                }
+                
+                .col-producto {
+                    width: 50%;
+                }
+                
+                .col-cantidad {
+                    width: 15%;
+                    text-align: center;
+                }
+                
+                .col-precio {
+                    width: 17%;
+                    text-align: right;
+                }
+                
+                .col-subtotal {
+                    width: 18%;
+                    text-align: right;
+                    font-weight: bold;
+                }
+                
+                .fila-subtotal td {
+                    border-bottom: none;
+                    padding-top: 2px;
+                    padding-bottom: 2px;
+                }
+                
+                /* TOTALES */
+                .seccion-totales {
+                    margin-top: 15px;
+                    border-top: 2px solid #000;
+                    padding-top: 10px;
+                }
+                
+                .fila-total {
+                    display: flex;
+                    justify-content: space-between;
+                    margin: 4px 0;
+                }
+                
+                .total-final {
+                    font-weight: bold;
+                    font-size: 13px;
+                    margin-top: 8px;
+                    padding-top: 5px;
+                    border-top: 1px solid #000;
+                }
+                
+                /* INFORMACIÓN DE PAGO */
+                .info-pago {
+                    margin-top: 10px;
+                    padding: 8px;
+                    background: #f5f5f5;
+                    border-radius: 3px;
+                    font-size: 10px;
+                }
+                
+                /* PIE DEL TICKET */
+                .pie-ticket {
+                    text-align: center;
+                    margin-top: 20px;
+                    font-size: 10px;
+                    border-top: 1px dashed #000;
+                    padding-top: 12px;
+                    line-height: 1.4;
+                }
+                
+                /* BOTONES (solo para vista previa) */
+                .botones-accion {
+                    display: none;
+                    margin-top: 20px;
+                    text-align: center;
+                }
+                
+                @media screen {
+                    .botones-accion {
+                        display: block;
+                    }
+                    
+                    body {
+                        padding: 20px;
+                        background: #f0f0f0;
+                    }
+                    
+                    .ticket {
+                        background: white;
+                        padding: 20px;
+                        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                        border-radius: 5px;
+                    }
+                }
+                
+                /* ESTILOS ESPECIALES */
+                .texto-centrado {
+                    text-align: center;
+                }
+                
+                .texto-derecha {
+                    text-align: right;
+                }
+                
+                .texto-negrita {
+                    font-weight: bold;
+                }
+                
+                .separador {
+                    border-bottom: 1px dashed #ccc;
+                    margin: 8px 0;
+                }
+            </style>
+        </head>
+        <body onload="window.print(); setTimeout(() => window.close(), 1000);">
+            <div class="ticket">
+                <!-- ENCABEZADO DE LA TIENDA -->
+                <div class="encabezado">
+                    <div class="nombre-tienda">${configTicket.tienda.nombre}</div>
+                    <div class="info-tienda">
+                        ${configTicket.tienda.direccion}<br>
+                        ${configTicket.tienda.telefono}<br>
+                        ${configTicket.tienda.rfc}
+                    </div>
+                </div>
+                
+                <!-- INFORMACIÓN DEL TICKET -->
+                <div class="info-ticket">
+                    <div class="numero-ticket">TICKET DE VENTA #${ventaData.id}</div>
+                    <div>Fecha: ${fecha}</div>
+                    <div>Hora: ${hora}</div>
+                    <div>Cajero: ${window.currentUser?.username || 'Sistema'}</div>
+                </div>
+                
+                <!-- TABLA DE PRODUCTOS -->
+                <table class="tabla-productos">
+                    <thead>
+                        <tr>
+                            <th class="col-producto">Descripción</th>
+                            <th class="col-cantidad">Cant</th>
+                            <th class="col-precio">P.Unit</th>
+                            <th class="col-subtotal">Importe</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
+    
+    // Generar filas de productos
+    let htmlProductos = '';
+    ventaData.productos.forEach((producto, index) => {
+        const subtotal = producto.precio * producto.cantidad;
+        htmlProductos += `
+            <tr>
+                <td class="col-producto">${producto.nombre}</td>
+                <td class="col-cantidad">${producto.cantidad}</td>
+                <td class="col-precio">$${producto.precio.toFixed(2)}</td>
+                <td class="col-subtotal">$${subtotal.toFixed(2)}</td>
+            </tr>
+        `;
+    });
+    
+    // Continuar con el HTML
+    const ticketContinuacion = `
+                    </tbody>
+                </table>
+                
+                <div class="separador"></div>
+                
+                <!-- SECCIÓN DE TOTALES -->
+                <div class="seccion-totales">
+                    <div class="fila-total">
+                        <span>Subtotal:</span>
+                        <span>$${ventaData.total.toFixed(2)}</span>
+                    </div>
+                    
+                    <!-- INFORMACIÓN DE PAGO -->
+                    <div class="info-pago">
+                        <div class="fila-total">
+                            <span>Método de pago:</span>
+                            <span class="texto-negrita">${metodoPago}</span>
+                        </div>
+    `;
+    
+    let htmlPago = '';
+    if (ventaData.metodo_pago === 'efectivo' && ventaData.pago_recibido) {
+        htmlPago = `
+                        <div class="fila-total">
+                            <span>Efectivo recibido:</span>
+                            <span>$${parseFloat(ventaData.pago_recibido).toFixed(2)}</span>
+                        </div>
+                        <div class="fila-total">
+                            <span>Cambio:</span>
+                            <span>$${parseFloat(ventaData.cambio || 0).toFixed(2)}</span>
+                        </div>
+        `;
+    }
+    
+    if (ventaData.referencia) {
+        htmlPago += `
+                        <div class="fila-total">
+                            <span>Referencia:</span>
+                            <span>${ventaData.referencia}</span>
+                        </div>
+        `;
+    }
+    
+    const ticketFinal = `
+                    </div>
+                    
+                    <!-- TOTAL FINAL -->
+                    <div class="fila-total total-final">
+                        <span>TOTAL:</span>
+                        <span>$${ventaData.total.toFixed(2)}</span>
+                    </div>
+                </div>
+                
+                <!-- PIE DEL TICKET -->
+                <div class="pie-ticket">
+                    <div class="texto-negrita">${configTicket.tienda.mensaje || '¡GRACIAS POR SU COMPRA!'}</div>
+                    <div>Vuelva pronto</div>
+                    <div>Este ticket es su comprobante de compra</div>
+                    <div>--- ${fecha} ${hora} ---</div>
+                </div>
+                
+                <!-- BOTONES DE ACCIÓN (solo en vista previa) -->
+                <div class="botones-accion">
+                    <button onclick="window.print()" style="
+                        padding: 10px 20px;
+                        background: #27ae60;
+                        color: white;
+                        border: none;
+                        border-radius: 5px;
+                        cursor: pointer;
+                        margin: 5px;
+                        font-size: 14px;
+                    ">
+                        🖨️ Imprimir de nuevo
+                    </button>
+                    <button onclick="window.close()" style="
+                        padding: 10px 20px;
+                        background: #e74c3c;
+                        color: white;
+                        border: none;
+                        border-radius: 5px;
+                        cursor: pointer;
+                        margin: 5px;
+                        font-size: 14px;
+                    ">
+                        ❌ Cerrar
+                    </button>
+                </div>
+            </div>
+            
+            <script>
+                // Configurar auto-impresión y cierre
+                document.addEventListener('DOMContentLoaded', function() {
+                    // Solo imprimir automáticamente si no estamos en vista previa
+                    if (!document.querySelector('.botones-accion').style.display === 'block') {
+                        setTimeout(() => {
+                            window.print();
+                            setTimeout(() => window.close(), 9000);
+                        }, 500);
+                    }
+                });
+                
+                // Atajo de teclado para imprimir
+                document.addEventListener('keydown', function(e) {
+                    if (e.key === 'p' && (e.ctrlKey || e.metaKey)) {
+                        e.preventDefault();
+                        window.print();
+                    }
+                    if (e.key === 'Escape') {
+                        window.close();
+                    }
+                });
+            </script>
+        </body>
+        </html>
+    `;
+    
+    // Combinar todo el HTML
+    const htmlCompleto = ticketHTML + htmlProductos + ticketContinuacion + htmlPago + ticketFinal;
+    
+    // Abrir nueva ventana con el ticket
+    const ventanaTicket = window.open('', '_blank', 
+        `width=400,height=600,left=${screen.width-450},top=100`
+    );
+    
+    if (!ventanaTicket) {
+        alert('⚠️ Por favor, permite ventanas emergentes para ver el ticket.');
+        // Fallback: mostrar en modal
+        mostrarTicketAlternativo(ventaData);
+        return;
+    }
+    
+    ventanaTicket.document.write(htmlCompleto);
+    ventanaTicket.document.close();
+    
+    // Enfocar la ventana
+    ventanaTicket.focus();
+    
+    // Notificación de éxito
+    console.log('✅ Ticket generado en nueva ventana');
+}
+
+// 🎫 FUNCIÓN DE FALLBACK (si no se pueden abrir ventanas emergentes)
+function mostrarTicketAlternativo(ventaData) {
+    const modalHTML = `
+        <div style="
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+            z-index: 9999;
+            max-width: 90%;
+            max-height: 90vh;
+            overflow: auto;
+        ">
+            <h3 style="color: #27ae60; margin-bottom: 15px;">✅ Venta Completada</h3>
+            <p>Ticket #${ventaData.id} - Total: $${ventaData.total.toFixed(2)}</p>
+            <p style="font-size: 12px; color: #666;">El ticket se abrirá en una nueva ventana.</p>
+            <div style="margin-top: 20px; text-align: center;">
+                <button onclick="this.parentElement.parentElement.remove()" style="
+                    padding: 10px 20px;
+                    background: #3498db;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    cursor: pointer;
+                ">
+                    ✅ Continuar
+                </button>
+            </div>
+        </div>
+    `;
+    
+    const modal = document.createElement('div');
+    modal.innerHTML = modalHTML;
+    document.body.appendChild(modal);
+}
+
+// 🏪 CONFIGURACIÓN POR DEFECTO DEL TICKET
+function inicializarConfigTicket() {
+    const configDefault = {
+        tienda: {
+            nombre: "MI TIENDA POS",
+            direccion: "Av. Principal 123",
+            telefono: "Tel: 555-1234",
+            rfc: "RFC: XAXX010101000",
+            mensaje: "¡GRACIAS POR SU COMPRA!"
+        }
+    };
+    
+    // Solo guardar si no existe configuración previa
+    if (!localStorage.getItem('ticketConfig')) {
+        localStorage.setItem('ticketConfig', JSON.stringify(configDefault));
+        console.log('✅ Configuración de ticket inicializada');
+    }
+}
+
+// Llama a esta función al cargar la app
+document.addEventListener('DOMContentLoaded', function() {
+    inicializarConfigTicket();
+});
